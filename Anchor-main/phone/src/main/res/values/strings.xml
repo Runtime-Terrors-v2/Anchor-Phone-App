@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">ANCHOR</string>
+
+    <!-- Notification channel -->
+    <string name="notification_channel_name">ANCHOR Alerts</string>
+    <string name="notification_channel_desc">Watch disconnect and safety alerts from ANCHOR</string>
+
+    <!-- Permission rationale strings shown in the system permission dialog -->
+    <string name="permission_sms_rationale">ANCHOR needs SMS permission to alert emergency contacts when the watch disconnects.</string>
+    <string name="permission_bluetooth_rationale">ANCHOR needs Bluetooth permission to detect and communicate with the patient\'s Huawei Watch.</string>
+    <string name="permission_notifications_rationale">ANCHOR needs notification permission to show you alerts when the watch goes offline.</string>
+</resources>

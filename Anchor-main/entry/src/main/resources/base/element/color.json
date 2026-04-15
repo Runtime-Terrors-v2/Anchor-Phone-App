@@ -1,0 +1,36 @@
+{
+  "color": [
+    {
+      "name": "start_window_background",
+      "value": "#000000"
+    },
+    {
+      "name": "anchor_background",
+      "value": "#0D0D0D"
+    },
+    {
+      "name": "color_safe",
+      "value": "#4ADE80"
+    },
+    {
+      "name": "color_drifting",
+      "value": "#FBBF24"
+    },
+    {
+      "name": "color_alert",
+      "value": "#F87171"
+    },
+    {
+      "name": "color_text_primary",
+      "value": "#FFFFFF"
+    },
+    {
+      "name": "color_text_secondary",
+      "value": "#AAAAAA"
+    },
+    {
+      "name": "color_surface",
+      "value": "#1A1A1A"
+    }
+  ]
+}

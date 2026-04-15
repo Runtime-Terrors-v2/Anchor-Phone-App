@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Colours for the Android phone companion.
+  Matches the semantic palette from the watch ArkTS theme (entry/src/main/resources/base/element/color.json)
+  but adapted for a light-background phone UI (the watch uses a dark #0D0D0D background).
+-->
+<resources>
+    <!-- Base UI -->
+    <color name="white">#FFFFFFFF</color>
+    <color name="background">#FFF8F8F8</color>
+    <color name="text_primary">#FF1A1A1A</color>
+    <color name="text_secondary">#FF888888</color>
+    <color name="text_muted">#FFAAAAAA</color>
+
+    <!-- Status — same semantic values as DriftState on the watch -->
+    <color name="safe_green">#FF1DAB5F</color>
+    <color name="drift_amber">#FFFBBF24</color>
+    <color name="alert_red">#FFE84026</color>
+
+    <!-- HMS Huawei red (sign-in button) -->
+    <color name="hms_red">#FFCC0000</color>
+
+    <!-- Card tints -->
+    <color name="safe_card_bg">#FFE1F5EE</color>
+    <color name="alert_card_bg">#FFFCEBEB</color>
+    <color name="blue_light">#FFE6F1FB</color>
+    <color name="purple_light">#FFEEEDFE</color>
+    <color name="amber_light">#FFFAEEDA</color>
+</resources>

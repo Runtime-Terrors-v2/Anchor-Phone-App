@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  App theme referenced in AndroidManifest.xml as android:theme="@style/Theme.Anchor".
+  Uses a NoActionBar base so the Compose NavHost controls all chrome.
+-->
+<resources>
+    <style name="Theme.Anchor" parent="Theme.Material3.Light.NoActionBar">
+        <item name="android:statusBarColor">@color/white</item>
+        <item name="android:navigationBarColor">@color/white</item>
+    </style>
+</resources>
