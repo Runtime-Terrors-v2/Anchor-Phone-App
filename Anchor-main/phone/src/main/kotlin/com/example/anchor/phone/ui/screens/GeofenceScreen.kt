@@ -399,12 +399,12 @@ private fun buildLeafletHtml(lat: Double, lng: Double): String = """
 
     // Safe zone — 30 m green circle
     L.circle([$lat, $lng], {
-      radius: 30, color: '#1DAB5F', fillColor: '#1DAB5F', fillOpacity: 0.12, weight: 2
+      radius: 30, color: '#4ADE80', fillColor: '#4ADE80', fillOpacity: 0.15, weight: 2
     }).addTo(map);
 
     // Alert zone — 50 m amber circle
     L.circle([$lat, $lng], {
-      radius: 50, color: '#FBBF24', fillColor: '#FBBF24', fillOpacity: 0.08, weight: 2,
+      radius: 50, color: '#F87171', fillColor: '#F87171', fillOpacity: 0.08, weight: 2,
       dashArray: '6 4'
     }).addTo(map);
 
