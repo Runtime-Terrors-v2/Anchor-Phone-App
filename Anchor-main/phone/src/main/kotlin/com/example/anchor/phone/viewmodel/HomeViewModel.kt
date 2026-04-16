@@ -10,6 +10,7 @@ import androidx.lifecycle.viewModelScope
 import com.Anchor.watchguardian.data.UserSession
 import com.Anchor.watchguardian.data.model.AlertContact
 import com.Anchor.watchguardian.data.model.AlertEvent
+import com.Anchor.watchguardian.services.NotificationHelper
 import com.Anchor.watchguardian.services.SmsService
 import com.Anchor.watchguardian.services.WatchMonitorService
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -76,13 +77,25 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 _alertHistory.value = listOf(event) + _alertHistory.value
                 saveAlertHistory()
 
-                // Fire SMS to emergency contacts in background
+                // Load contacts once — used for both SMS dispatch and notification body
+                val contacts = loadContactsAsAlertContacts()
+                val smsCount = contacts.count { it.phoneNumber.isNotBlank() }
+
+                // Show a local notification on the caregiver's phone so they're
+                // alerted even when the app is in the background
+                NotificationHelper.showWatchDisconnected(
+                    context      = context,
+                    watchName    = deviceName,
+                    contactCount = smsCount
+                )
+
+                // Fire SMS to all priority contacts that have a phone number
                 viewModelScope.launch {
                     SmsService.sendDisconnectAlert(
                         context   = context,
                         watchName = deviceName,
                         ownerName = event.ownerName,
-                        contacts  = loadContactsAsAlertContacts()
+                        contacts  = contacts
                     )
                 }
             }
