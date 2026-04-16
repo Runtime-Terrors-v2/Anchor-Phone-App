@@ -18,6 +18,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import kotlinx.coroutines.launch
 import com.Anchor.watchguardian.data.model.DriftState
 import com.Anchor.watchguardian.ui.theme.*
 import com.Anchor.watchguardian.viewmodel.GeofenceViewModel
