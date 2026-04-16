@@ -3,6 +3,7 @@ package com.Anchor.watchguardian.services
 import android.Manifest
 import android.annotation.SuppressLint
 import android.bluetooth.BluetoothAdapter
+import android.bluetooth.BluetoothClass
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothManager
 import android.bluetooth.BluetoothProfile
@@ -95,7 +96,7 @@ class WatchMonitorService private constructor() {
             override fun onReceive(context: Context, intent: Intent) {
                 when (intent.action) {
 
-                    // Real-time connect / disconnect for any Bluetooth device
+                    // Real-time connect / disconnect — only react to watch devices
                     BluetoothDevice.ACTION_ACL_CONNECTED,
                     BluetoothDevice.ACTION_ACL_DISCONNECTED -> {
                         val device: BluetoothDevice =
@@ -109,19 +110,25 @@ class WatchMonitorService private constructor() {
                                 intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE)
                             } ?: return
 
+                        // Ignore headphones, speakers, keyboards, etc.
+                        if (!isWatchDevice(device)) {
+                            Log.d(TAG, "Ignoring non-watch BT event: ${safeGetDeviceName(device)}")
+                            return
+                        }
+
                         val name = safeGetDeviceName(device)
 
                         when (intent.action) {
                             BluetoothDevice.ACTION_ACL_CONNECTED -> {
                                 isWatchConnected    = true
                                 connectedDeviceName = name
-                                Log.i(TAG, "BT ACL connected: $name")
+                                Log.i(TAG, "Watch connected: $name")
                                 onConnect?.invoke(name)
                             }
                             BluetoothDevice.ACTION_ACL_DISCONNECTED -> {
                                 isWatchConnected    = false
                                 connectedDeviceName = name
-                                Log.w(TAG, "BT ACL disconnected: $name")
+                                Log.w(TAG, "Watch disconnected: $name")
                                 onDisconnect?.invoke(name)
                             }
                         }
@@ -231,12 +238,14 @@ class WatchMonitorService private constructor() {
             emptySet()
         }
 
-        // Filter to devices that are actually connected right now
-        val activeDevices = (bondedDevices + gattDevices).filter { isDeviceCurrentlyConnected(it) }
+        // Filter to watch devices that are actually connected right now
+        val activeDevices = (bondedDevices + gattDevices)
+            .filter { isWatchDevice(it) && isDeviceCurrentlyConnected(it) }
 
-        // Prefer a watch-like name; fall back to any connected device
-        val watchDevice = activeDevices.firstOrNull { isLikelyWatch(it) }
-            ?: activeDevices.firstOrNull()
+        // Prefer a wearable-class device; fall back to name-matched watch
+        val watchDevice = activeDevices.firstOrNull {
+            it.bluetoothClass?.majorDeviceClass == BluetoothClass.Device.Major.WEARABLE
+        } ?: activeDevices.firstOrNull()
 
         if (watchDevice != null) {
             val name = safeGetDeviceName(watchDevice)
@@ -280,10 +289,23 @@ class WatchMonitorService private constructor() {
             btManager?.getConnectedDevices(BluetoothProfile.GATT)?.contains(device) ?: false
         }
 
-    /** Heuristic: does the device name suggest it's a Huawei / Honor wearable? */
-    private fun isLikelyWatch(device: BluetoothDevice): Boolean {
+    /**
+     * Returns true if the device is likely a smartwatch.
+     *
+     * Two signals checked in order:
+     *   1. Bluetooth device class == WEARABLE — set by the hardware, works for any brand
+     *   2. Name heuristic — fallback for devices that advertise the wrong class
+     *
+     * This filters out headphones, speakers, keyboards, and other BT peripherals.
+     */
+    private fun isWatchDevice(device: BluetoothDevice): Boolean {
+        val btClass = device.bluetoothClass
+        if (btClass != null && btClass.majorDeviceClass == BluetoothClass.Device.Major.WEARABLE) {
+            return true
+        }
         val name = safeGetDeviceName(device).lowercase()
-        return name.contains("watch") || name.contains("huawei") || name.contains("honor")
+        return name.contains("watch") || name.contains("band") ||
+               name.contains("huawei") || name.contains("honor")
     }
 
     /** Read device.name safely — requires BLUETOOTH_CONNECT on API 31+. */
