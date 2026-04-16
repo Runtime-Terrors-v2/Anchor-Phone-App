@@ -212,6 +212,13 @@ class WatchMonitorService private constructor() {
         cancelPendingDisconnect()
         val runnable = Runnable {
             pendingDisconnect = null
+            // Guard: if already marked disconnected (by a previous event), do nothing.
+            // This prevents multiple onDisconnect calls — and multiple notifications —
+            // when several ACL events fire in quick succession for the same watch.
+            if (!isWatchConnected) {
+                Log.d(TAG, "Debounce: already disconnected — skipping duplicate event for $name")
+                return@Runnable
+            }
             if (isDeviceCurrentlyConnected(device)) {
                 // The watch re-established its link within the debounce window
                 Log.d(TAG, "Debounce: $name is still connected — ignoring transient disconnect")
