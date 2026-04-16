@@ -18,8 +18,10 @@ import androidx.navigation.compose.rememberNavController
 import com.Anchor.watchguardian.data.UserSession
 import com.Anchor.watchguardian.services.WatchMonitorService
 import com.Anchor.watchguardian.ui.screens.*
+import com.Anchor.watchguardian.ui.screens.GeofenceScreen
 import com.Anchor.watchguardian.ui.theme.AnchorTheme
 import com.Anchor.watchguardian.viewmodel.ContactsViewModel
+import com.Anchor.watchguardian.viewmodel.GeofenceViewModel
 import com.Anchor.watchguardian.viewmodel.HomeViewModel
 import com.huawei.hms.common.ApiException
 import com.huawei.hms.push.HmsMessaging
@@ -30,10 +32,11 @@ import com.huawei.hms.support.hwid.request.HuaweiIdAuthParamsHelper
 private const val TAG = "MainActivity"
 
 // Navigation route names
-private const val ROUTE_LOGIN   = "login"
-private const val ROUTE_HOME    = "home"
+private const val ROUTE_LOGIN    = "login"
+private const val ROUTE_HOME     = "home"
 private const val ROUTE_CONTACTS = "contacts"
-private const val ROUTE_ALERTS  = "alert_history"
+private const val ROUTE_ALERTS   = "alert_history"
+private const val ROUTE_GEOFENCE = "geofence"
 
 /**
  * Single-activity host for the entire phone companion app.
@@ -54,10 +57,12 @@ class MainActivity : ComponentActivity() {
     // ViewModels scoped to this Activity — survive configuration changes
     private val homeViewModel:     HomeViewModel     by viewModels()
     private val contactsViewModel: ContactsViewModel by viewModels()
+    private val geofenceViewModel: GeofenceViewModel by viewModels()
 
     // Permissions to request on first launch
     private val permissionsToRequest = buildList {
         add(Manifest.permission.SEND_SMS)
+        add(Manifest.permission.ACCESS_FINE_LOCATION)
         add(Manifest.permission.BLUETOOTH_CONNECT) // Android 12+
         add(Manifest.permission.BLUETOOTH_SCAN)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -112,10 +117,11 @@ class MainActivity : ComponentActivity() {
 
                     composable(ROUTE_HOME) {
                         HomeScreen(
-                            viewModel          = homeViewModel,
-                            onNavigateContacts = { navController.navigate(ROUTE_CONTACTS) },
-                            onNavigateAlerts   = { navController.navigate(ROUTE_ALERTS) },
-                            onSignOut          = {
+                            viewModel           = homeViewModel,
+                            onNavigateContacts  = { navController.navigate(ROUTE_CONTACTS) },
+                            onNavigateAlerts    = { navController.navigate(ROUTE_ALERTS) },
+                            onNavigateGeofence  = { navController.navigate(ROUTE_GEOFENCE) },
+                            onSignOut           = {
                                 WatchMonitorService.getInstance().stopMonitoring()
                                 UserSession.logout(this@MainActivity)
                                 navController.navigate(ROUTE_LOGIN) {
@@ -135,6 +141,13 @@ class MainActivity : ComponentActivity() {
                     composable(ROUTE_ALERTS) {
                         AlertHistoryScreen(
                             viewModel = homeViewModel,
+                            onBack    = { navController.popBackStack() }
+                        )
+                    }
+
+                    composable(ROUTE_GEOFENCE) {
+                        GeofenceScreen(
+                            viewModel = geofenceViewModel,
                             onBack    = { navController.popBackStack() }
                         )
                     }
