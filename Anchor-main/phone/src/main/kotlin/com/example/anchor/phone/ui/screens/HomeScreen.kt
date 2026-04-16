@@ -233,7 +233,7 @@ fun HomeScreen(
                     .weight(1f)
                     .height(52.dp),
                 shape    = RoundedCornerShape(14.dp),
-                colors   = OutlinedButtonDefaults.outlinedButtonColors(contentColor = AlertRed),
+                colors   = ButtonDefaults.outlinedButtonColors(contentColor = AlertRed),
                 border   = ButtonDefaults.outlinedButtonBorder
             ) {
                 Text("Simulate", fontSize = 13.sp, color = AlertRed)

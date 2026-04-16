@@ -146,7 +146,7 @@ fun LoginScreen(onLoginSuccess: () -> Unit) {
                     .fillMaxWidth()
                     .height(52.dp),
                 shape    = RoundedCornerShape(16.dp),
-                colors   = OutlinedButtonDefaults.outlinedButtonColors(contentColor = TextSecond)
+                colors   = ButtonDefaults.outlinedButtonColors(contentColor = TextSecond)
             ) {
                 Text("Skip login (debug)", fontSize = 15.sp)
             }

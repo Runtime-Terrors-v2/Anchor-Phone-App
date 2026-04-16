@@ -196,7 +196,7 @@ fun GeofenceScreen(
                                 onClick  = { viewModel.clearAnchor() },
                                 modifier = Modifier.height(48.dp),
                                 shape    = RoundedCornerShape(12.dp),
-                                colors   = OutlinedButtonDefaults.outlinedButtonColors(contentColor = AlertRed)
+                                colors   = ButtonDefaults.outlinedButtonColors(contentColor = AlertRed)
                             ) {
                                 Text("Clear", fontSize = 14.sp, color = AlertRed)
                             }
