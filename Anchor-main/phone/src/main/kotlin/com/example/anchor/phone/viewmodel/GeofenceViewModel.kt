@@ -29,23 +29,36 @@ class GeofenceViewModel(application: Application) : AndroidViewModel(application
     private val _isMonitoring = MutableStateFlow(false)
     private val _hasAnchor    = MutableStateFlow(false)
     private val _anchorText   = MutableStateFlow("Not set")
+    private val _anchorCoords = MutableStateFlow<Pair<Double, Double>?>(null)
+    /** Human-readable GPS fix status shown near the "Set here" button. */
+    private val _gpsStatus    = MutableStateFlow("No GPS fix yet")
 
-    val driftState:   StateFlow<DriftState> = _driftState
-    val distanceM:    StateFlow<Float>      = _distanceM
-    val bearingDeg:   StateFlow<Float>      = _bearingDeg
-    val isMonitoring: StateFlow<Boolean>    = _isMonitoring
-    val hasAnchor:    StateFlow<Boolean>    = _hasAnchor
-    val anchorText:   StateFlow<String>     = _anchorText
+    val driftState:   StateFlow<DriftState>              = _driftState
+    val distanceM:    StateFlow<Float>                   = _distanceM
+    val bearingDeg:   StateFlow<Float>                   = _bearingDeg
+    val isMonitoring: StateFlow<Boolean>                 = _isMonitoring
+    val hasAnchor:    StateFlow<Boolean>                 = _hasAnchor
+    val anchorText:   StateFlow<String>                  = _anchorText
+    /** Lat/lng of the current anchor — non-null only when hasAnchor is true. */
+    val anchorCoords: StateFlow<Pair<Double, Double>?>   = _anchorCoords
+    val gpsStatus:    StateFlow<String>                  = _gpsStatus
 
     init {
         geofenceService.onStateChange = { state, dist, bearing ->
             _driftState.value = state
             _distanceM.value  = dist
             _bearingDeg.value = bearing
+            // Update GPS status on first fix
+            if (geofenceService.lastLocation != null && _gpsStatus.value == "No GPS fix yet") {
+                _gpsStatus.value = "GPS fix ready"
+            }
         }
         geofenceService.init()
         _hasAnchor.value = geofenceService.hasAnchor
         updateAnchorText()
+        if (geofenceService.hasAnchor) {
+            _anchorCoords.value = geofenceService.anchorLatLng()
+        }
     }
 
     /** Start GPS + motion monitoring. Called when the user enables monitoring on-screen. */
@@ -70,7 +83,8 @@ class GeofenceViewModel(application: Application) : AndroidViewModel(application
      */
     fun setAnchorPoint(lat: Double, lng: Double) {
         geofenceService.setAnchorPoint(lat, lng)
-        _hasAnchor.value = true
+        _hasAnchor.value    = true
+        _anchorCoords.value = Pair(lat, lng)
         updateAnchorText()
         Log.i(TAG, "Anchor set: ($lat, $lng)")
     }
@@ -79,12 +93,13 @@ class GeofenceViewModel(application: Application) : AndroidViewModel(application
     fun clearAnchor() {
         if (_isMonitoring.value) stopMonitoring()
         geofenceService.clearAnchor()
-        _hasAnchor.value = false
-        _anchorText.value = "Not set"
+        _hasAnchor.value    = false
+        _anchorText.value   = "Not set"
+        _anchorCoords.value = null
     }
 
-    /** Last GPS fix from the service — used by the screen to "set anchor here". */
-    fun getLastLocation() = geofenceService.lastLocation
+    /** Best available GPS fix — tries live location, then system cache. */
+    fun getLastLocation() = geofenceService.getBestLastLocation()
 
     private fun updateAnchorText() {
         if (!geofenceService.hasAnchor) { _anchorText.value = "Not set"; return }

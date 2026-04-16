@@ -115,6 +115,28 @@ class PhoneGeofenceService(private val context: Context) {
 
     fun anchorLatLng(): Pair<Double, Double> = Pair(anchorLat, anchorLng)
 
+    /**
+     * Returns the best available location without waiting for a new GPS fix.
+     * Checks in priority order:
+     *   1. lastLocation — a live fix from our own GPS listener (most accurate)
+     *   2. System's last known GPS location — cached by Android from any recent app
+     *   3. Network / passive provider — less accurate but available immediately indoors
+     *
+     * This means "Set here" works even before the first update fires from our listener.
+     */
+    @SuppressLint("MissingPermission")
+    fun getBestLastLocation(): android.location.Location? {
+        if (lastLocation != null) return lastLocation
+        return try {
+            locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER)
+                ?: locationManager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER)
+                ?: locationManager.getLastKnownLocation(LocationManager.PASSIVE_PROVIDER)
+        } catch (e: Exception) {
+            Log.w(TAG, "getLastKnownLocation failed: ${e.message}")
+            null
+        }
+    }
+
     // ------------------------------------------------------------------
     // Monitoring lifecycle
     // ------------------------------------------------------------------
