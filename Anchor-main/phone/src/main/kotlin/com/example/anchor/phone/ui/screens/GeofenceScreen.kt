@@ -67,8 +67,8 @@ fun GeofenceScreen(
                 modifier              = Modifier
                     .fillMaxWidth()
                     .background(White)
-                    .border(0.5.dp, Color(0xFFEEEEEE))
-                    .padding(horizontal = 20.dp, vertical = 16.dp),
+                    .border(0.5.dp, Color(0xFFE5E7EB))
+                    .padding(horizontal = 20.dp, vertical = 18.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment     = Alignment.CenterVertically
             ) {
@@ -77,12 +77,12 @@ fun GeofenceScreen(
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     TextButton(onClick = onBack) {
-                        Text("\u2190", fontSize = 20.sp, color = TextPrimary)
+                        Text("←", fontSize = 22.sp, color = TextPrimary)
                     }
                     Text(
-                        "Geofence monitor",
-                        fontSize   = 18.sp,
-                        fontWeight = FontWeight.Medium,
+                        "Geofence Monitor",
+                        fontSize   = 20.sp,
+                        fontWeight = FontWeight.SemiBold,
                         color      = TextPrimary
                     )
                 }
@@ -96,28 +96,29 @@ fun GeofenceScreen(
             Column(
                 modifier = Modifier
                     .fillMaxWidth(0.9f)
-                    .background(stateStyle.cardBg, RoundedCornerShape(16.dp))
-                    .border(1.dp, stateStyle.cardBorder, RoundedCornerShape(16.dp))
-                    .padding(24.dp),
+                    .background(stateStyle.cardBg, RoundedCornerShape(20.dp))
+                    .border(1.5.dp, stateStyle.cardBorder, RoundedCornerShape(20.dp))
+                    .padding(28.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 Text(
                     text       = stateStyle.label,
-                    fontSize   = 28.sp,
+                    fontSize   = 36.sp,
                     fontWeight = FontWeight.Bold,
-                    color      = stateStyle.stateColor
+                    color      = stateStyle.stateColor,
+                    letterSpacing = 1.sp
                 )
                 if (driftState != DriftState.NOT_SET && distanceM > 0f) {
                     Text(
                         text     = "${distanceM.toInt()} m from anchor",
-                        fontSize = 15.sp,
+                        fontSize = 17.sp,
                         color    = TextSecond
                     )
                 }
                 Text(
                     text     = stateDescription(driftState),
-                    fontSize = 13.sp,
+                    fontSize = 15.sp,
                     color    = TextMuted
                 )
             }
@@ -128,15 +129,15 @@ fun GeofenceScreen(
             Column(
                 modifier            = Modifier
                     .fillMaxWidth(0.9f)
-                    .background(White, RoundedCornerShape(12.dp))
-                    .border(0.5.dp, Color(0xFFEEEEEE), RoundedCornerShape(12.dp))
-                    .padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                    .background(White, RoundedCornerShape(16.dp))
+                    .border(1.dp, Color(0xFFE5E7EB), RoundedCornerShape(16.dp))
+                    .padding(20.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
                 Text(
-                    text       = "Home anchor",
-                    fontSize   = 13.sp,
-                    fontWeight = FontWeight.Medium,
+                    text       = "Home Anchor",
+                    fontSize   = 15.sp,
+                    fontWeight = FontWeight.SemiBold,
                     color      = TextSecond
                 )
 
@@ -147,17 +148,17 @@ fun GeofenceScreen(
                 ) {
                     Column(
                         modifier            = Modifier.weight(1f),
-                        verticalArrangement = Arrangement.spacedBy(2.dp)
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
                         Text(
                             text     = if (hasAnchor) anchorText else "No anchor set",
-                            fontSize = 14.sp,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Medium,
                             color    = if (hasAnchor) TextPrimary else TextMuted
                         )
-                        // GPS fix status — helps the user know whether "Set here" will work
                         Text(
                             text     = gpsStatus,
-                            fontSize = 11.sp,
+                            fontSize = 13.sp,
                             color    = when {
                                 gpsStatus.contains("ready", ignoreCase = true) -> SafeGreen
                                 gpsStatus.contains("No GPS", ignoreCase = true) -> DriftAmber
@@ -166,17 +167,15 @@ fun GeofenceScreen(
                         )
                     }
 
-                    Spacer(modifier = Modifier.width(8.dp))
+                    Spacer(modifier = Modifier.width(10.dp))
 
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        // Set anchor — always enabled; uses best available location
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         Button(
                             onClick = {
                                 val loc = viewModel.getLastLocation()
                                 if (loc != null) {
                                     viewModel.setAnchorPoint(loc.latitude, loc.longitude)
                                 } else {
-                                    // Show feedback instead of silently failing
                                     scope.launch {
                                         snackbarHostState.showSnackbar(
                                             message  = "No GPS fix yet — start monitoring or wait outdoors",
@@ -185,18 +184,21 @@ fun GeofenceScreen(
                                     }
                                 }
                             },
-                            shape  = RoundedCornerShape(8.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = TextPrimary)
+                            modifier = Modifier.height(48.dp),
+                            shape    = RoundedCornerShape(12.dp),
+                            colors   = ButtonDefaults.buttonColors(containerColor = DeepBlue)
                         ) {
-                            Text("Set here", fontSize = 12.sp)
+                            Text("Set here", fontSize = 14.sp)
                         }
 
                         if (hasAnchor) {
                             OutlinedButton(
-                                onClick = { viewModel.clearAnchor() },
-                                shape   = RoundedCornerShape(8.dp)
+                                onClick  = { viewModel.clearAnchor() },
+                                modifier = Modifier.height(48.dp),
+                                shape    = RoundedCornerShape(12.dp),
+                                colors   = OutlinedButtonDefaults.outlinedButtonColors(contentColor = AlertRed)
                             ) {
-                                Text("Clear", fontSize = 12.sp, color = AlertRed)
+                                Text("Clear", fontSize = 14.sp, color = AlertRed)
                             }
                         }
                     }
@@ -210,20 +212,20 @@ fun GeofenceScreen(
                 Column(
                     modifier            = Modifier
                         .fillMaxWidth(0.9f)
-                        .background(White, RoundedCornerShape(12.dp))
-                        .border(0.5.dp, Color(0xFFEEEEEE), RoundedCornerShape(12.dp))
-                        .padding(12.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                        .background(White, RoundedCornerShape(16.dp))
+                        .border(1.dp, Color(0xFFE5E7EB), RoundedCornerShape(16.dp))
+                        .padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     Text(
-                        text       = "Anchor location",
-                        fontSize   = 13.sp,
-                        fontWeight = FontWeight.Medium,
+                        text       = "Anchor Location",
+                        fontSize   = 15.sp,
+                        fontWeight = FontWeight.SemiBold,
                         color      = TextSecond
                     )
                     Text(
-                        text     = "Green circle = 30 m safe zone · Amber = 50 m alert zone",
-                        fontSize = 11.sp,
+                        text     = "🟢 30 m safe zone   🟠 50 m alert zone",
+                        fontSize = 13.sp,
                         color    = TextMuted
                     )
 
@@ -244,15 +246,15 @@ fun GeofenceScreen(
             Column(
                 modifier            = Modifier
                     .fillMaxWidth(0.9f)
-                    .background(White, RoundedCornerShape(12.dp))
-                    .border(0.5.dp, Color(0xFFEEEEEE), RoundedCornerShape(12.dp))
-                    .padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                    .background(White, RoundedCornerShape(16.dp))
+                    .border(1.dp, Color(0xFFE5E7EB), RoundedCornerShape(16.dp))
+                    .padding(20.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
                 Text(
                     text       = "Monitoring",
-                    fontSize   = 13.sp,
-                    fontWeight = FontWeight.Medium,
+                    fontSize   = 15.sp,
+                    fontWeight = FontWeight.SemiBold,
                     color      = TextSecond
                 )
 
@@ -261,34 +263,36 @@ fun GeofenceScreen(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment     = Alignment.CenterVertically
                 ) {
-                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Text(
                             text       = if (isMonitoring) "Active" else "Inactive",
-                            fontSize   = 15.sp,
-                            fontWeight = FontWeight.Medium,
+                            fontSize   = 18.sp,
+                            fontWeight = FontWeight.SemiBold,
                             color      = if (isMonitoring) SafeGreen else TextMuted
                         )
                         Text(
                             text     = if (isMonitoring) "GPS + motion detection running"
                                        else "Tap Start to begin monitoring",
-                            fontSize = 12.sp,
+                            fontSize = 14.sp,
                             color    = TextMuted
                         )
                     }
 
                     Button(
-                        onClick = {
+                        onClick  = {
                             if (isMonitoring) viewModel.stopMonitoring()
                             else viewModel.startMonitoring()
                         },
-                        shape  = RoundedCornerShape(8.dp),
-                        colors = ButtonDefaults.buttonColors(
+                        modifier = Modifier.height(52.dp),
+                        shape    = RoundedCornerShape(14.dp),
+                        colors   = ButtonDefaults.buttonColors(
                             containerColor = if (isMonitoring) AlertRed else SafeGreen
                         )
                     ) {
                         Text(
                             text     = if (isMonitoring) "Stop" else "Start",
-                            fontSize = 13.sp
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.SemiBold
                         )
                     }
                 }
@@ -301,23 +305,23 @@ fun GeofenceScreen(
                 Row(
                     modifier              = Modifier
                         .fillMaxWidth(0.9f)
-                        .background(BlueLight, RoundedCornerShape(8.dp))
-                        .padding(12.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        .background(BlueLight, RoundedCornerShape(14.dp))
+                        .padding(16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
                     verticalAlignment     = Alignment.Top
                 ) {
                     Text(
-                        text       = "i",
-                        fontSize   = 13.sp,
-                        color      = Color(0xFF0C447C),
+                        text       = "ℹ",
+                        fontSize   = 16.sp,
+                        color      = DeepBlue,
                         fontWeight = FontWeight.Bold
                     )
                     Text(
                         text     = "Go to the home location, tap Start to get a GPS fix, " +
-                                   "then tap 'Set here' to save the anchor. " +
-                                   "You can also 'Set here' without starting monitoring if the GPS status shows 'GPS fix ready'.",
-                        fontSize = 12.sp,
-                        color    = Color(0xFF185FA5)
+                                   "then tap 'Set here' to save the anchor.",
+                        fontSize = 14.sp,
+                        color    = Color(0xFF1565C0),
+                        lineHeight = 21.sp
                     )
                 }
             }

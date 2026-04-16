@@ -4,8 +4,10 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -19,18 +21,6 @@ import com.Anchor.watchguardian.data.UserSession
 import com.Anchor.watchguardian.ui.theme.*
 import com.Anchor.watchguardian.viewmodel.HomeViewModel
 
-/**
- * Caregiver home screen — main dashboard.
- *
- * Mirrors HomePage.ets (HarmonyOS) with the same layout:
- *   - Header: "ANCHOR" title + user initials avatar
- *   - Watch status card (green = connected, red = disconnected)
- *   - Stats row: contact count, alert count this week, ON/OFF guardian status
- *   - MANAGE section: nav to Contacts and Alert History
- *   - Bottom: Refresh, Simulate Disconnect (debug), Sign Out
- *
- * State is collected from HomeViewModel StateFlows.
- */
 @Composable
 fun HomeScreen(
     viewModel:            HomeViewModel,
@@ -44,266 +34,312 @@ fun HomeScreen(
     val watchName      by viewModel.watchName.collectAsState()
     val alertHistory   by viewModel.alertHistory.collectAsState()
 
-    // Initials from OpenID — same logic as getInitials() in HomePage.ets
     val initials = UserSession.getOpenID(context).let { id ->
         if (id.length >= 2) id.substring(0, 2).uppercase() else "HJ"
     }
 
-    // "Last seen" text — mirrors getLastSeenText() in HomePage.ets
     val lastSeenText = when {
-        watchConnected -> "Last seen: just now"
+        watchConnected -> "Connected right now"
         alertHistory.isNotEmpty() -> {
             val diffMs = System.currentTimeMillis() - alertHistory.first().timestamp
             val mins   = (diffMs / 60_000).toInt()
-            if (mins < 60) "Offline · ${mins}m ago" else "Offline · ${mins / 60}h ago"
+            if (mins < 60) "Last seen ${mins}m ago" else "Last seen ${mins / 60}h ago"
         }
-        else -> "Offline · alerts sent to contacts"
+        else -> "Not connected"
     }
 
     Column(
-        modifier            = Modifier
+        modifier = Modifier
             .fillMaxSize()
-            .background(White),
+            .background(Background)
+            .verticalScroll(rememberScrollState()),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         // --- Header ---
-        Row(
-            modifier              = Modifier
+        Box(
+            modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 20.dp, vertical = 20.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment     = Alignment.CenterVertically
+                .background(White)
+                .padding(horizontal = 24.dp, vertical = 20.dp)
         ) {
-            Text("ANCHOR", fontSize = 20.sp, fontWeight = FontWeight.Medium, color = TextPrimary)
+            Text(
+                text       = "ANCHOR",
+                fontSize   = 22.sp,
+                fontWeight = FontWeight.Bold,
+                color      = TextPrimary,
+                letterSpacing = 1.sp,
+                modifier   = Modifier.align(Alignment.CenterStart)
+            )
             Box(
                 contentAlignment = Alignment.Center,
                 modifier         = Modifier
-                    .size(36.dp)
+                    .size(42.dp)
                     .background(BlueLight, CircleShape)
+                    .align(Alignment.CenterEnd)
             ) {
-                Text(initials, fontSize = 13.sp, fontWeight = FontWeight.Medium, color = Color(0xFF0C447C))
-            }
-        }
-
-        // --- Watch status card ---
-        Column(
-            modifier = Modifier
-                .fillMaxWidth(0.9f)
-                .background(
-                    if (watchConnected) SafeCardBg else AlertCardBg,
-                    RoundedCornerShape(12.dp)
-                )
-                .border(
-                    0.5.dp,
-                    if (watchConnected) SafeCardBorder else AlertCardBorder,
-                    RoundedCornerShape(12.dp)
-                )
-                .padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
-            Row(
-                verticalAlignment     = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(10.dp)
-                        .background(if (watchConnected) SafeGreen else AlertRed, CircleShape)
-                )
                 Text(
-                    text       = if (watchConnected) "Watch connected" else "Watch disconnected",
-                    fontSize   = 16.sp,
-                    fontWeight = FontWeight.Medium,
-                    color      = if (watchConnected) Color(0xFF0F6E56) else Color(0xFFA32D2D)
+                    text       = initials,
+                    fontSize   = 15.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color      = DeepBlue
                 )
             }
-            Text(
-                text     = watchName.ifBlank { "Huawei Watch Ultimate" },
-                fontSize = 13.sp,
-                color    = TextSecond
-            )
-            Text(text = lastSeenText, fontSize = 12.sp, color = TextMuted)
-        }
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        // --- Stats row ---
-        Row(
-            modifier              = Modifier.fillMaxWidth(0.9f),
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            StatCard(
-                label      = "Contacts",
-                value      = viewModel.getContactCount().toString(),
-                sub        = "priority",
-                modifier   = Modifier.weight(1f)
-            )
-            StatCard(
-                label      = "Alerts",
-                value      = viewModel.getAlertCountThisWeek().toString(),
-                sub        = "this week",
-                modifier   = Modifier.weight(1f)
-            )
-            StatCard(
-                label      = "Status",
-                value      = if (watchConnected) "ON" else "OFF",
-                sub        = "guardian",
-                modifier   = Modifier.weight(1f),
-                valueColor = if (watchConnected) SafeGreen else AlertRed
-            )
         }
 
         Spacer(modifier = Modifier.height(20.dp))
 
-        // --- MANAGE section label ---
+        // --- Watch status card ---
+        val connected = watchConnected
+        Box(
+            modifier = Modifier
+                .fillMaxWidth(0.9f)
+                .background(
+                    if (connected) SafeCardBg else AlertCardBg,
+                    RoundedCornerShape(20.dp)
+                )
+                .border(
+                    1.5.dp,
+                    if (connected) SafeCardBorder else AlertCardBorder,
+                    RoundedCornerShape(20.dp)
+                )
+                .padding(24.dp)
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Row(
+                    verticalAlignment     = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(14.dp)
+                            .background(
+                                if (connected) SafeGreen else AlertRed,
+                                CircleShape
+                            )
+                    )
+                    Text(
+                        text       = if (connected) "Watch Connected" else "Watch Disconnected",
+                        fontSize   = 20.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color      = if (connected) Color(0xFF0F6E56) else Color(0xFFB91C1C)
+                    )
+                }
+                Text(
+                    text     = watchName.ifBlank { "Huawei Watch Ultimate" },
+                    fontSize = 15.sp,
+                    color    = TextSecond
+                )
+                Text(
+                    text     = lastSeenText,
+                    fontSize = 14.sp,
+                    color    = TextMuted
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(20.dp))
+
+        // --- Quick stats ---
+        Row(
+            modifier              = Modifier
+                .fillMaxWidth(0.9f),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            QuickStat(
+                value    = viewModel.getContactCount().toString(),
+                label    = "Contacts",
+                modifier = Modifier.weight(1f)
+            )
+            QuickStat(
+                value    = viewModel.getAlertCountThisWeek().toString(),
+                label    = "Alerts this week",
+                modifier = Modifier.weight(1f)
+            )
+            QuickStat(
+                value      = if (watchConnected) "ON" else "OFF",
+                label      = "Guardian",
+                valueColor = if (watchConnected) SafeGreen else AlertRed,
+                modifier   = Modifier.weight(1f)
+            )
+        }
+
+        Spacer(modifier = Modifier.height(28.dp))
+
+        // --- Section label ---
         Text(
             text          = "MANAGE",
             fontSize      = 12.sp,
-            fontWeight    = FontWeight.Medium,
+            fontWeight    = FontWeight.SemiBold,
             color         = TextMuted,
-            letterSpacing = 0.5.sp,
+            letterSpacing = 1.5.sp,
             modifier      = Modifier
                 .fillMaxWidth(0.9f)
-                .padding(bottom = 8.dp)
+                .padding(bottom = 10.dp)
         )
 
         // --- Nav cards ---
         Column(
             modifier            = Modifier.fillMaxWidth(0.9f),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+            verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             NavCard(
-                emoji    = "\uD83D\uDC65", // 👥
+                emoji    = "👥",
                 tint     = PurpleLight,
-                title    = "Priority contacts",
-                subtitle = "${viewModel.getContactCount()} contacts added",
+                title    = "Priority Contacts",
+                subtitle = "${viewModel.getContactCount()} contacts will be alerted",
                 onClick  = onNavigateContacts
             )
             NavCard(
-                emoji    = "\uD83D\uDD14", // 🔔
+                emoji    = "🔔",
                 tint     = AmberLight,
-                title    = "Alert history",
-                subtitle = "Last alert: ${if (alertHistory.isEmpty()) "none" else "recently"}",
+                title    = "Alert History",
+                subtitle = if (alertHistory.isEmpty()) "No alerts yet"
+                           else "${viewModel.getAlertCountThisWeek()} alert(s) this week",
                 badge    = viewModel.getAlertCountThisWeek().takeIf { it > 0 }?.toString(),
                 onClick  = onNavigateAlerts
             )
             NavCard(
-                emoji    = "\uD83D\uDCCD", // 📍
-                tint     = Color(0xFFE8F5E9),
-                title    = "Geofence monitor",
-                subtitle = "GPS drift detection on this phone",
+                emoji    = "📍",
+                tint     = SafeCardBg,
+                title    = "Geofence Monitor",
+                subtitle = "GPS drift detection · Set home anchor",
                 onClick  = onNavigateGeofence
             )
         }
 
-        Spacer(modifier = Modifier.weight(1f))
+        Spacer(modifier = Modifier.height(28.dp))
 
-        // --- Bottom action bar ---
+        // --- Actions row ---
         Row(
             modifier              = Modifier
                 .fillMaxWidth(0.9f)
-                .padding(bottom = 20.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment     = Alignment.CenterVertically
+                .padding(bottom = 28.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             OutlinedButton(
-                onClick = { viewModel.refreshWatchStatus() },
-                shape   = RoundedCornerShape(8.dp)
+                onClick  = { viewModel.refreshWatchStatus() },
+                modifier = Modifier
+                    .weight(1f)
+                    .height(52.dp),
+                shape    = RoundedCornerShape(14.dp)
             ) {
-                Text("Refresh", fontSize = 13.sp, color = TextSecond)
+                Text("Refresh", fontSize = 15.sp, color = TextSecond)
             }
 
-            // DEBUG ONLY — remove before submission; mirrors "Simulate disconnect" in HomePage.ets
-            Button(
-                onClick = { viewModel.simulateDisconnect() },
-                shape   = RoundedCornerShape(22.dp),
-                colors  = ButtonDefaults.buttonColors(containerColor = AlertRed)
+            // DEBUG
+            OutlinedButton(
+                onClick  = { viewModel.simulateDisconnect() },
+                modifier = Modifier
+                    .weight(1f)
+                    .height(52.dp),
+                shape    = RoundedCornerShape(14.dp),
+                colors   = OutlinedButtonDefaults.outlinedButtonColors(contentColor = AlertRed),
+                border   = ButtonDefaults.outlinedButtonBorder
             ) {
-                Text("Simulate disconnect", fontSize = 12.sp)
+                Text("Simulate", fontSize = 13.sp, color = AlertRed)
             }
 
-            TextButton(onClick = onSignOut) {
-                Text("Sign out", fontSize = 13.sp, color = AlertRed)
+            TextButton(
+                onClick  = onSignOut,
+                modifier = Modifier.height(52.dp)
+            ) {
+                Text("Sign out", fontSize = 15.sp, color = AlertRed)
             }
         }
     }
 }
 
-// --- Shared sub-composables ---
+// --- Sub-composables ---
 
 @Composable
-private fun StatCard(
-    label:      String,
+private fun QuickStat(
     value:      String,
-    sub:        String,
+    label:      String,
     modifier:   Modifier = Modifier,
     valueColor: Color    = TextPrimary
 ) {
     Column(
         modifier            = modifier
-            .background(Background, RoundedCornerShape(8.dp))
-            .padding(12.dp),
+            .background(White, RoundedCornerShape(14.dp))
+            .border(1.dp, Color(0xFFE5E7EB), RoundedCornerShape(14.dp))
+            .padding(14.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
-        Text(label, fontSize = 11.sp, color = TextSecond)
-        Text(value, fontSize = 20.sp, fontWeight = FontWeight.Medium, color = valueColor)
-        Text(sub,   fontSize = 11.sp, color = TextMuted)
+        Text(
+            text       = value,
+            fontSize   = 26.sp,
+            fontWeight = FontWeight.Bold,
+            color      = valueColor
+        )
+        Text(
+            text     = label,
+            fontSize = 12.sp,
+            color    = TextMuted
+        )
     }
 }
 
 @Composable
 private fun NavCard(
-    emoji:   String,
-    tint:    Color,
-    title:   String,
+    emoji:    String,
+    tint:     Color,
+    title:    String,
     subtitle: String,
-    badge:   String? = null,
-    onClick: () -> Unit
+    badge:    String? = null,
+    onClick:  () -> Unit
 ) {
     Row(
         modifier              = Modifier
             .fillMaxWidth()
-            .background(White, RoundedCornerShape(12.dp))
-            .border(0.5.dp, Color(0xFFEEEEEE), RoundedCornerShape(12.dp))
+            .background(White, RoundedCornerShape(16.dp))
+            .border(1.dp, Color(0xFFE5E7EB), RoundedCornerShape(16.dp))
             .clickable { onClick() }
-            .padding(14.dp),
+            .padding(18.dp),
         verticalAlignment     = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
+        horizontalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // Emoji icon in a tinted box
         Box(
             contentAlignment = Alignment.Center,
             modifier         = Modifier
-                .size(36.dp)
-                .background(tint, RoundedCornerShape(8.dp))
+                .size(48.dp)
+                .background(tint, RoundedCornerShape(12.dp))
         ) {
-            Text(emoji, fontSize = 16.sp)
+            Text(emoji, fontSize = 22.sp)
         }
 
-        // Title + optional badge + subtitle
         Column(
             modifier            = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(2.dp)
+            verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             Row(
                 verticalAlignment     = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Text(title, fontSize = 14.sp, fontWeight = FontWeight.Medium, color = TextPrimary)
+                Text(
+                    text       = title,
+                    fontSize   = 17.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color      = TextPrimary
+                )
                 if (badge != null) {
                     Text(
                         text     = badge,
-                        fontSize = 10.sp,
+                        fontSize = 11.sp,
                         color    = White,
                         modifier = Modifier
                             .background(AlertRed, RoundedCornerShape(10.dp))
-                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                            .padding(horizontal = 7.dp, vertical = 3.dp)
                     )
                 }
             }
-            Text(subtitle, fontSize = 12.sp, color = TextSecond)
+            Text(
+                text     = subtitle,
+                fontSize = 14.sp,
+                color    = TextSecond
+            )
         }
 
-        Text("\u203A", fontSize = 18.sp, color = Color(0xFFCCCCCC)) // ›
+        Text("›", fontSize = 22.sp, color = Color(0xFFD1D5DB))
     }
 }
