@@ -66,6 +66,41 @@ object NotificationHelper {
         NotificationManagerCompat.from(context).notify(NOTIFY_ID, notification)
     }
 
+    /**
+     * Show a high-priority geofence ALERT notification on the caregiver's phone.
+     * Uses ID 3001 — distinct from the watch-disconnect notification (2001).
+     *
+     * @param distanceM how far from the anchor the person is when ALERT fires.
+     */
+    fun showGeofenceAlert(context: Context, distanceM: Float) {
+        ensureChannel(context)
+
+        val body = "Movement detected — ${distanceM.toInt()}m from the safe zone. Check in immediately."
+
+        val intent = Intent(context, MainActivity::class.java).apply {
+            putExtra("navigate_to", "geofence")
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+        }
+        val pendingIntent = PendingIntent.getActivity(
+            context,
+            3001,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val notification = NotificationCompat.Builder(context, CHANNEL_ID)
+            .setSmallIcon(android.R.drawable.ic_dialog_alert)
+            .setContentTitle("ANCHOR: Geofence Alert")
+            .setContentText(body)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(body))
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setAutoCancel(true)
+            .setContentIntent(pendingIntent)
+            .build()
+
+        NotificationManagerCompat.from(context).notify(3001, notification)
+    }
+
     /** Create the notification channel once; no-op if it already exists. */
     private fun ensureChannel(context: Context) {
         val channel = NotificationChannel(

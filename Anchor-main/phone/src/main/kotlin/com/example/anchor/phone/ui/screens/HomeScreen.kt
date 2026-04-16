@@ -33,10 +33,11 @@ import com.Anchor.watchguardian.viewmodel.HomeViewModel
  */
 @Composable
 fun HomeScreen(
-    viewModel:           HomeViewModel,
-    onNavigateContacts:  () -> Unit,
-    onNavigateAlerts:    () -> Unit,
-    onSignOut:           () -> Unit
+    viewModel:            HomeViewModel,
+    onNavigateContacts:   () -> Unit,
+    onNavigateAlerts:     () -> Unit,
+    onNavigateGeofence:   () -> Unit,
+    onSignOut:            () -> Unit
 ) {
     val context        = LocalContext.current
     val watchConnected by viewModel.watchConnected.collectAsState()
@@ -185,6 +186,13 @@ fun HomeScreen(
                 subtitle = "Last alert: ${if (alertHistory.isEmpty()) "none" else "recently"}",
                 badge    = viewModel.getAlertCountThisWeek().takeIf { it > 0 }?.toString(),
                 onClick  = onNavigateAlerts
+            )
+            NavCard(
+                emoji    = "\uD83D\uDCCD", // 📍
+                tint     = Color(0xFFE8F5E9),
+                title    = "Geofence monitor",
+                subtitle = "GPS drift detection on this phone",
+                onClick  = onNavigateGeofence
             )
         }
 
