@@ -15,18 +15,18 @@ val DeepBlue    = Color(0xFF1565C0)
 val DeepBlueLt  = Color(0xFFE3F2FD)
 
 // --- Status colours ---
-val SafeGreen   = Color(0xFF1DAB5F)
+val SafeGreen   = Color(0xFF16A34A)   // adapted from watch #4ADE80 for light bg
 val DriftAmber  = Color(0xFFF59E0B)
-val AlertRed    = Color(0xFFDC2626)
+val AlertRed    = Color(0xFFEF4444)   // adapted from watch #F87171 for light bg
 
 // HMS Huawei red
 val HmsRed      = Color(0xFFCC0000)
 
 // --- Card tint variants ---
-val SafeCardBg      = Color(0xFFE8F5EE)
+val SafeCardBg      = Color(0xFFDCFCE7)   // lighter green tint, matches 16A34A family
 val SafeCardBorder  = Color(0xFF86EFAC)
 val AlertCardBg     = Color(0xFFFEF2F2)
-val AlertCardBorder = Color(0xFFFCA5A5)
+val AlertCardBorder = Color(0xFFFCA5A5)   // softened to match EF4444 family
 val PurpleLight     = Color(0xFFEDE9FE)
 val BlueLight       = Color(0xFFE3F2FD)
 val AmberLight      = Color(0xFFFEF3C7)
