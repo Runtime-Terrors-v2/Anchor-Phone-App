@@ -235,6 +235,15 @@ class WatchMonitorService private constructor() {
             ) == PackageManager.PERMISSION_GRANTED
         }
 
+    /**
+     * Queues a contact-list payload for delivery to the watch.
+     * Real delivery requires the WearEngine AAR (P2pClient.send).
+     * Until then, the payload is logged so the format can be verified.
+     */
+    fun syncContactsToWatch(contactsJson: String) {
+        Log.d(TAG, "syncContactsToWatch: payload queued (WearEngine not wired) — $contactsJson")
+    }
+
     // --- Debug helpers (used by HomeViewModel.simulateDisconnect / HomeScreen button) ---
 
     /** Simulate a watch connect event — useful for UI testing without a real watch. */
