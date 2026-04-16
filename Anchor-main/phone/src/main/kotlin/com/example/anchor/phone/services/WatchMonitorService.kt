@@ -13,10 +13,18 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import androidx.core.content.ContextCompat
 
 private const val TAG = "WatchMonitorService"
+
+// Huawei watches keep multiple simultaneous BT links (Classic BT + BLE). When the
+// BLE link briefly drops and reconnects in the background, ACTION_ACL_DISCONNECTED fires
+// even though the watch is still physically on your wrist. We wait this long before
+// treating a disconnect event as real, giving the watch time to re-establish its link.
+private const val DISCONNECT_DEBOUNCE_MS = 5_000L
 
 typealias ConnectCallback    = (deviceName: String) -> Unit
 typealias DisconnectCallback = (deviceName: String) -> Unit
@@ -26,20 +34,19 @@ typealias DisconnectCallback = (deviceName: String) -> Unit
  *
  * Uses standard Android Bluetooth ACL broadcast events — no WearEngine AAR required.
  *
- * Three signal sources work together:
- *   1. ACTION_ACL_CONNECTED / ACTION_ACL_DISCONNECTED — real-time events for any BT device
- *   2. ACTION_STATE_CHANGED — fires when the user toggles Bluetooth off (no ACL event in that case)
- *   3. checkCurrentConnectionState() — checks bonded + GATT devices on startup and Refresh tap
+ * Signal sources:
+ *   1. ACTION_ACL_CONNECTED      — fires immediately; watch is connected
+ *   2. ACTION_ACL_DISCONNECTED   — debounced 5s then verified; avoids false alarms from
+ *                                   transient BLE link drops on multi-link watches
+ *   3. ACTION_STATE_CHANGED      — Bluetooth turned off; fire disconnect with no debounce
+ *   4. checkCurrentConnectionState() — bonded + GATT scan on startup and Refresh tap
  *
  * Lifecycle:
  *   init(context)             — called from MainActivity.onCreate(), stores context only
  *   setCallbacks(...)         — called from HomeViewModel before startMonitoring()
- *   startMonitoring()         — registers BroadcastReceiver, then runs initial state check
- *   stopMonitoring()          — unregisters receiver
+ *   startMonitoring()         — registers receiver, then does initial state check
+ *   stopMonitoring()          — unregisters receiver, cancels pending debounce
  *   refreshConnectedDevices() — re-runs state check on "Refresh" tap
- *
- * Requires permissions (declared in AndroidManifest.xml):
- *   BLUETOOTH, BLUETOOTH_ADMIN, BLUETOOTH_CONNECT (API 31+), BLUETOOTH_SCAN (API 31+)
  */
 class WatchMonitorService private constructor() {
 
@@ -56,6 +63,10 @@ class WatchMonitorService private constructor() {
     private var appContext: Context? = null
     private var btReceiver: BroadcastReceiver? = null
 
+    // Handler + pending runnable for the disconnect debounce
+    private val mainHandler = Handler(Looper.getMainLooper())
+    private var pendingDisconnect: Runnable? = null
+
     var isWatchConnected:    Boolean = false
         private set
     var connectedDeviceName: String  = ""
@@ -66,7 +77,7 @@ class WatchMonitorService private constructor() {
 
     /**
      * Store the application context.
-     * Does NOT check connection state here — callbacks are not set yet at this point.
+     * Does NOT check connection state here — callbacks aren't set yet.
      * State check happens in startMonitoring() after setCallbacks() has been called.
      */
     fun init(context: Context) {
@@ -82,21 +93,19 @@ class WatchMonitorService private constructor() {
     /**
      * Register a BroadcastReceiver for Bluetooth events, then check current state.
      * Safe to call multiple times — registers only once.
-     *
-     * Must be called after setCallbacks() so the initial state check can fire callbacks.
+     * Must be called after setCallbacks().
      */
     fun startMonitoring() {
         val ctx = appContext ?: run {
             Log.w(TAG, "startMonitoring: init() not called yet — skipping")
             return
         }
-        if (btReceiver != null) return  // already registered
+        if (btReceiver != null) return
 
         btReceiver = object : BroadcastReceiver() {
             override fun onReceive(context: Context, intent: Intent) {
                 when (intent.action) {
 
-                    // Real-time connect / disconnect — only react to watch devices
                     BluetoothDevice.ACTION_ACL_CONNECTED,
                     BluetoothDevice.ACTION_ACL_DISCONNECTED -> {
                         val device: BluetoothDevice =
@@ -110,7 +119,6 @@ class WatchMonitorService private constructor() {
                                 intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE)
                             } ?: return
 
-                        // Ignore headphones, speakers, keyboards, etc.
                         if (!isWatchDevice(device)) {
                             Log.d(TAG, "Ignoring non-watch BT event: ${safeGetDeviceName(device)}")
                             return
@@ -120,31 +128,40 @@ class WatchMonitorService private constructor() {
 
                         when (intent.action) {
                             BluetoothDevice.ACTION_ACL_CONNECTED -> {
-                                isWatchConnected    = true
-                                connectedDeviceName = name
-                                Log.i(TAG, "Watch connected: $name")
-                                onConnect?.invoke(name)
+                                // Cancel any pending disconnect — the watch reconnected
+                                // within the debounce window (normal for BLE link cycling)
+                                cancelPendingDisconnect()
+                                if (!isWatchConnected) {
+                                    isWatchConnected    = true
+                                    connectedDeviceName = name
+                                    Log.i(TAG, "Watch connected: $name")
+                                    onConnect?.invoke(name)
+                                }
                             }
                             BluetoothDevice.ACTION_ACL_DISCONNECTED -> {
-                                isWatchConnected    = false
-                                connectedDeviceName = name
-                                Log.w(TAG, "Watch disconnected: $name")
-                                onDisconnect?.invoke(name)
+                                // Don't fire immediately — wait DISCONNECT_DEBOUNCE_MS then
+                                // verify the watch is actually gone. If the BLE link just
+                                // cycled, ACTION_ACL_CONNECTED will arrive first and cancel this.
+                                Log.d(TAG, "ACL disconnected for $name — debouncing ${DISCONNECT_DEBOUNCE_MS}ms")
+                                schedulePendingDisconnect(device, name)
                             }
                         }
                     }
 
-                    // Bluetooth adapter turned off — no ACL_DISCONNECTED fires in this case
+                    // Bluetooth turned off — all links are gone, no ACL_DISCONNECTED fires
                     BluetoothAdapter.ACTION_STATE_CHANGED -> {
                         val state = intent.getIntExtra(
                             BluetoothAdapter.EXTRA_STATE, BluetoothAdapter.ERROR
                         )
-                        if (state == BluetoothAdapter.STATE_OFF && isWatchConnected) {
-                            val name = connectedDeviceName
-                            isWatchConnected    = false
-                            connectedDeviceName = ""
-                            Log.w(TAG, "Bluetooth turned off — treating watch as disconnected")
-                            onDisconnect?.invoke(name)
+                        if (state == BluetoothAdapter.STATE_OFF) {
+                            cancelPendingDisconnect()
+                            if (isWatchConnected) {
+                                val name = connectedDeviceName
+                                isWatchConnected    = false
+                                connectedDeviceName = ""
+                                Log.w(TAG, "Bluetooth turned off — watch disconnected")
+                                onDisconnect?.invoke(name)
+                            }
                         }
                     }
                 }
@@ -157,21 +174,18 @@ class WatchMonitorService private constructor() {
             addAction(BluetoothAdapter.ACTION_STATE_CHANGED)
         }
 
-        // API 33+ (targeting API 34) requires an explicit export flag.
-        // RECEIVER_NOT_EXPORTED is correct — system broadcasts bypass this flag anyway.
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             ctx.registerReceiver(btReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
         } else {
             ctx.registerReceiver(btReceiver, filter)
         }
 
-        Log.i(TAG, "Bluetooth monitor started — listening for ACL + state events")
-
-        // Initial check now that callbacks are set
+        Log.i(TAG, "Bluetooth monitor started")
         checkCurrentConnectionState()
     }
 
     fun stopMonitoring() {
+        cancelPendingDisconnect()
         val ctx = appContext ?: return
         btReceiver?.let { receiver ->
             try {
@@ -190,16 +204,36 @@ class WatchMonitorService private constructor() {
     }
 
     /**
+     * Schedule a disconnect to fire after DISCONNECT_DEBOUNCE_MS.
+     * The runnable re-checks the device's actual connection state before firing —
+     * if the watch reconnected in the meantime, the callback is suppressed.
+     */
+    private fun schedulePendingDisconnect(device: BluetoothDevice, name: String) {
+        cancelPendingDisconnect()
+        val runnable = Runnable {
+            pendingDisconnect = null
+            if (isDeviceCurrentlyConnected(device)) {
+                // The watch re-established its link within the debounce window
+                Log.d(TAG, "Debounce: $name is still connected — ignoring transient disconnect")
+            } else {
+                isWatchConnected    = false
+                connectedDeviceName = name
+                Log.w(TAG, "Debounce: $name confirmed disconnected")
+                onDisconnect?.invoke(name)
+            }
+        }
+        pendingDisconnect = runnable
+        mainHandler.postDelayed(runnable, DISCONNECT_DEBOUNCE_MS)
+    }
+
+    private fun cancelPendingDisconnect() {
+        pendingDisconnect?.let { mainHandler.removeCallbacks(it) }
+        pendingDisconnect = null
+    }
+
+    /**
      * Check which Bluetooth devices are currently connected and update state.
-     *
-     * Covers both Classic BT (bonded devices) and BLE (GATT profile):
-     *   - Iterates all bonded (paired) devices and calls isConnected() on each
-     *   - Also checks BluetoothManager.getConnectedDevices(GATT) for BLE-only devices
-     *
-     * isConnected() is public on API 34+. On API 26–33 it is a hidden method called
-     * via reflection — it has existed in AOSP since API 19 and works reliably.
-     *
-     * Must be called after setCallbacks() to fire callbacks correctly.
+     * Covers Classic BT (bonded devices via reflection) and BLE (GATT list).
      */
     private fun checkCurrentConnectionState() {
         val ctx = appContext ?: return
@@ -223,7 +257,6 @@ class WatchMonitorService private constructor() {
             return
         }
 
-        // Bonded devices covers Classic BT connections (e.g. Huawei Watch companion link)
         val bondedDevices: Set<BluetoothDevice> = try {
             adapter.bondedDevices ?: emptySet()
         } catch (e: SecurityException) {
@@ -231,18 +264,16 @@ class WatchMonitorService private constructor() {
             emptySet()
         }
 
-        // GATT list covers BLE-only devices that may not be bonded
         val gattDevices: Set<BluetoothDevice> = try {
             btManager.getConnectedDevices(BluetoothProfile.GATT).toSet()
         } catch (e: SecurityException) {
             emptySet()
         }
 
-        // Filter to watch devices that are actually connected right now
         val activeDevices = (bondedDevices + gattDevices)
             .filter { isWatchDevice(it) && isDeviceCurrentlyConnected(it) }
 
-        // Prefer a wearable-class device; fall back to name-matched watch
+        // Prefer a device with the WEARABLE class; fall back to name-matched device
         val watchDevice = activeDevices.firstOrNull {
             it.bluetoothClass?.majorDeviceClass == BluetoothClass.Device.Major.WEARABLE
         } ?: activeDevices.firstOrNull()
@@ -252,7 +283,7 @@ class WatchMonitorService private constructor() {
             if (!isWatchConnected) {
                 isWatchConnected    = true
                 connectedDeviceName = name
-                Log.i(TAG, "State check: device connected — $name")
+                Log.i(TAG, "State check: watch found connected — $name")
                 onConnect?.invoke(name)
             } else {
                 Log.d(TAG, "State check: still connected to $connectedDeviceName")
@@ -265,38 +296,31 @@ class WatchMonitorService private constructor() {
                 Log.w(TAG, "State check: $name no longer connected")
                 onDisconnect?.invoke(name)
             } else {
-                Log.d(TAG, "State check: no device connected")
+                Log.d(TAG, "State check: no watch connected")
             }
         }
     }
 
     /**
-     * Check if a BluetoothDevice is currently in a connected state.
-     *
-     * API 34+ exposes isConnected() as a public method.
-     * API 26–33: call the same method via reflection (hidden but stable since API 19).
-     * Fallback: check GATT connected list if reflection fails.
+     * Check if a specific BluetoothDevice is currently connected via reflection.
+     * isConnected() has been a stable hidden method in AOSP since API 19.
+     * Falls back to the GATT list if reflection fails.
      */
     @SuppressLint("MissingPermission")
     private fun isDeviceCurrentlyConnected(device: BluetoothDevice): Boolean =
         try {
-            // isConnected() is a hidden method in all API levels — use reflection.
             val method = BluetoothDevice::class.java.getMethod("isConnected")
             method.invoke(device) as Boolean
         } catch (e: Exception) {
-            Log.d(TAG, "isConnected() reflection failed for ${safeGetDeviceName(device)}, falling back to GATT list")
+            Log.d(TAG, "isConnected() reflection failed — falling back to GATT list")
             val btManager = appContext?.getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager
             btManager?.getConnectedDevices(BluetoothProfile.GATT)?.contains(device) ?: false
         }
 
     /**
-     * Returns true if the device is likely a smartwatch.
-     *
-     * Two signals checked in order:
-     *   1. Bluetooth device class == WEARABLE — set by the hardware, works for any brand
-     *   2. Name heuristic — fallback for devices that advertise the wrong class
-     *
-     * This filters out headphones, speakers, keyboards, and other BT peripherals.
+     * Returns true if the device is a smartwatch.
+     * Checks BluetoothClass.Device.Major.WEARABLE first (hardware-set, brand-agnostic),
+     * then falls back to name keywords.
      */
     private fun isWatchDevice(device: BluetoothDevice): Boolean {
         val btClass = device.bluetoothClass
@@ -308,7 +332,6 @@ class WatchMonitorService private constructor() {
                name.contains("huawei") || name.contains("honor")
     }
 
-    /** Read device.name safely — requires BLUETOOTH_CONNECT on API 31+. */
     @SuppressLint("MissingPermission")
     private fun safeGetDeviceName(device: BluetoothDevice): String =
         try {
@@ -328,10 +351,6 @@ class WatchMonitorService private constructor() {
             ) == PackageManager.PERMISSION_GRANTED
         }
 
-    /**
-     * Queues a contact-list payload for delivery to the watch.
-     * Real delivery requires the WearEngine AAR (P2pClient.send).
-     */
     fun syncContactsToWatch(contactsJson: String) {
         Log.d(TAG, "syncContactsToWatch: payload queued (WearEngine not wired)")
     }
@@ -339,12 +358,14 @@ class WatchMonitorService private constructor() {
     // --- Debug helpers ---
 
     fun simulateConnect(deviceName: String = "Huawei Watch Ultimate") {
+        cancelPendingDisconnect()
         isWatchConnected    = true
         connectedDeviceName = deviceName
         onConnect?.invoke(deviceName)
     }
 
     fun simulateDisconnect(deviceName: String = "Huawei Watch Ultimate") {
+        cancelPendingDisconnect()
         isWatchConnected    = false
         connectedDeviceName = ""
         onDisconnect?.invoke(deviceName)
