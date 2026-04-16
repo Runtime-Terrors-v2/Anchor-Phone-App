@@ -22,17 +22,6 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-/**
- * Alert history screen — log of all watch-disconnect events.
- *
- * Mirrors AlertHistoryPage.ets (HarmonyOS) with:
- *   - Empty state when no alerts
- *   - Summary banner with total count
- *   - Scrollable list of alert events (index pill, watch name, date, time-ago)
- *   - Clear All button
- *
- * Uses HomeViewModel since alert history is owned there (same source as HomeScreen stats).
- */
 @Composable
 fun AlertHistoryScreen(
     viewModel: HomeViewModel,
@@ -50,23 +39,29 @@ fun AlertHistoryScreen(
         Row(
             modifier              = Modifier
                 .fillMaxWidth()
-                .border(width = 0.5.dp, color = Color(0xFFEEEEEE))
-                .padding(horizontal = 20.dp, vertical = 20.dp),
+                .background(White)
+                .border(width = 0.5.dp, color = Color(0xFFE5E7EB))
+                .padding(horizontal = 20.dp, vertical = 18.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment     = Alignment.CenterVertically
         ) {
             Row(
                 verticalAlignment     = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 TextButton(onClick = onBack) {
-                    Text("\u2190", fontSize = 20.sp, color = TextPrimary) // ←
+                    Text("←", fontSize = 22.sp, color = TextPrimary)
                 }
-                Text("Alert history", fontSize = 18.sp, fontWeight = FontWeight.Medium, color = TextPrimary)
+                Text(
+                    text       = "Alert History",
+                    fontSize   = 20.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color      = TextPrimary
+                )
             }
             if (alertHistory.isNotEmpty()) {
                 TextButton(onClick = { viewModel.clearAlertHistory() }) {
-                    Text("Clear all", fontSize = 13.sp, color = AlertRed)
+                    Text("Clear all", fontSize = 15.sp, color = AlertRed)
                 }
             }
         }
@@ -74,14 +69,22 @@ fun AlertHistoryScreen(
         // --- Empty state ---
         if (alertHistory.isEmpty()) {
             Column(
-                modifier            = Modifier.padding(top = 80.dp),
+                modifier            = Modifier
+                    .fillMaxSize()
+                    .padding(top = 80.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
-                Text("No alerts yet", fontSize = 16.sp, color = TextSecond)
+                Text("🔕", fontSize = 52.sp)
                 Text(
-                    text     = "Disconnect events will appear here\nwhen your watch goes offline.",
-                    fontSize = 13.sp,
+                    text       = "No alerts yet",
+                    fontSize   = 20.sp,
+                    fontWeight = FontWeight.Medium,
+                    color      = TextSecond
+                )
+                Text(
+                    text     = "Watch disconnect events\nwill appear here.",
+                    fontSize = 15.sp,
                     color    = TextMuted
                 )
             }
@@ -92,22 +95,23 @@ fun AlertHistoryScreen(
         Row(
             modifier              = Modifier
                 .fillMaxWidth(0.9f)
-                .padding(top = 16.dp, bottom = 8.dp)
-                .background(Color(0xFFFFF5F5), RoundedCornerShape(10.dp))
-                .border(0.5.dp, Color(0xFFF7C1C1), RoundedCornerShape(10.dp))
-                .padding(14.dp),
+                .padding(top = 16.dp, bottom = 4.dp)
+                .background(AlertCardBg, RoundedCornerShape(14.dp))
+                .border(1.dp, AlertCardBorder, RoundedCornerShape(14.dp))
+                .padding(18.dp),
             verticalAlignment     = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Text(
                 text       = alertHistory.size.toString(),
-                fontSize   = 22.sp,
-                fontWeight = FontWeight.Medium,
+                fontSize   = 32.sp,
+                fontWeight = FontWeight.Bold,
                 color      = AlertRed
             )
             Text(
-                text     = if (alertHistory.size == 1) "disconnect event recorded" else "disconnect events recorded",
-                fontSize = 13.sp,
+                text     = if (alertHistory.size == 1) "disconnect event recorded"
+                           else "disconnect events recorded",
+                fontSize = 15.sp,
                 color    = TextSecond
             )
         }
@@ -116,11 +120,11 @@ fun AlertHistoryScreen(
         LazyColumn(
             modifier            = Modifier.fillMaxSize(),
             horizontalAlignment = Alignment.CenterHorizontally,
-            contentPadding      = PaddingValues(bottom = 40.dp)
+            contentPadding      = PaddingValues(top = 12.dp, bottom = 48.dp)
         ) {
             itemsIndexed(alertHistory) { index, alert ->
                 AlertRow(index = index, alert = alert)
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(10.dp))
             }
         }
     }
@@ -131,71 +135,79 @@ private fun AlertRow(index: Int, alert: AlertEvent) {
     Row(
         modifier              = Modifier
             .fillMaxWidth(0.9f)
-            .background(White, RoundedCornerShape(12.dp))
-            .border(0.5.dp, Color(0xFFEEEEEE), RoundedCornerShape(12.dp))
-            .padding(14.dp),
+            .background(White, RoundedCornerShape(16.dp))
+            .border(1.dp, Color(0xFFE5E7EB), RoundedCornerShape(16.dp))
+            .padding(16.dp),
         verticalAlignment     = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
+        horizontalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        // Index pill (1-based, same as ArkTS version)
+        // Index badge
         Box(
             contentAlignment = Alignment.Center,
             modifier         = Modifier
-                .size(28.dp)
-                .background(Color(0xFFFCEBEB), CircleShape)
+                .size(36.dp)
+                .background(AlertCardBg, CircleShape)
+                .border(1.dp, AlertCardBorder, CircleShape)
         ) {
             Text(
                 text       = (index + 1).toString(),
-                fontSize   = 12.sp,
-                fontWeight = FontWeight.Medium,
-                color      = Color(0xFFA32D2D)
+                fontSize   = 14.sp,
+                fontWeight = FontWeight.SemiBold,
+                color      = AlertRed
             )
         }
 
         // Alert info
         Column(
             modifier            = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(4.dp)
+            verticalArrangement = Arrangement.spacedBy(5.dp)
         ) {
             Row(
                 verticalAlignment     = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Text(
                     text       = alert.watchName.ifBlank { "Huawei Watch" },
-                    fontSize   = 14.sp,
-                    fontWeight = FontWeight.Medium,
+                    fontSize   = 16.sp,
+                    fontWeight = FontWeight.SemiBold,
                     color      = TextPrimary
                 )
                 Text(
                     text     = "offline",
-                    fontSize = 10.sp,
-                    color    = Color(0xFFA32D2D),
+                    fontSize = 11.sp,
+                    color    = AlertRed,
+                    fontWeight = FontWeight.SemiBold,
                     modifier = Modifier
-                        .background(Color(0xFFFCEBEB), RoundedCornerShape(4.dp))
-                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                        .background(AlertCardBg, RoundedCornerShape(6.dp))
+                        .padding(horizontal = 8.dp, vertical = 3.dp)
                 )
             }
-            Text(formatDate(alert.timestamp), fontSize = 12.sp, color = TextSecond)
+            Text(
+                text     = formatDate(alert.timestamp),
+                fontSize = 14.sp,
+                color    = TextSecond
+            )
         }
 
         // Time ago
-        Text(timeAgo(alert.timestamp), fontSize = 11.sp, color = TextMuted)
+        Text(
+            text     = timeAgo(alert.timestamp),
+            fontSize = 13.sp,
+            color    = TextMuted
+        )
     }
 }
 
-/** Format timestamp as "DD/MM at HH:mm" — mirrors formatDate() in AlertHistoryPage.ets. */
 private fun formatDate(timestamp: Long): String =
-    SimpleDateFormat("dd/MM 'at' HH:mm", Locale.getDefault()).format(Date(timestamp))
+    SimpleDateFormat("dd MMM 'at' HH:mm", Locale.getDefault()).format(Date(timestamp))
 
-/** Human-readable elapsed time — mirrors getTimeAgo() in AlertHistoryPage.ets. */
 private fun timeAgo(timestamp: Long): String {
     val diff = System.currentTimeMillis() - timestamp
     val mins = (diff / 60_000).toInt()
     return when {
-        mins < 1  -> "just now"
-        mins < 60 -> "${mins}m ago"
+        mins < 1    -> "Just now"
+        mins < 60   -> "${mins}m ago"
         mins < 1440 -> "${mins / 60}h ago"
-        else       -> "${mins / 1440}d ago"
+        else        -> "${mins / 1440}d ago"
     }
 }
