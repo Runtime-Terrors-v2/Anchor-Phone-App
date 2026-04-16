@@ -271,14 +271,11 @@ class WatchMonitorService private constructor() {
     @SuppressLint("MissingPermission")
     private fun isDeviceCurrentlyConnected(device: BluetoothDevice): Boolean =
         try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-                device.isConnected
-            } else {
-                val method = BluetoothDevice::class.java.getMethod("isConnected")
-                method.invoke(device) as Boolean
-            }
+            // isConnected() is a hidden method in all API levels — use reflection.
+            val method = BluetoothDevice::class.java.getMethod("isConnected")
+            method.invoke(device) as Boolean
         } catch (e: Exception) {
-            Log.d(TAG, "isConnected() unavailable for ${safeGetDeviceName(device)}, falling back to GATT list")
+            Log.d(TAG, "isConnected() reflection failed for ${safeGetDeviceName(device)}, falling back to GATT list")
             val btManager = appContext?.getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager
             btManager?.getConnectedDevices(BluetoothProfile.GATT)?.contains(device) ?: false
         }
