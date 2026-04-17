@@ -210,8 +210,8 @@ fun GeofenceScreen(
             Spacer(modifier = Modifier.height(16.dp))
 
             // Use real anchor coords if saved, otherwise fall back to hardcoded demo point
-            val mapLat = anchorCoords?.first  ?: 28.6129   // India Gate, New Delhi
-            val mapLng = anchorCoords?.second ?: 77.2295
+            val mapLat = anchorCoords?.first  ?: 1.3483    // Nanyang Business School, NTU Singapore
+            val mapLng = anchorCoords?.second ?: 103.6831
 
             Column(
                 modifier            = Modifier
