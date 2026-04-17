@@ -4,13 +4,65 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <!-- Simple anchor icon -->
+
+    <!--
+        ANCHOR logo — matches the app icon:
+        Green (#4ADE80) anchor outline on transparent background.
+        Background colour (#0D0D0D) is set separately in ic_launcher_background.xml.
+
+        Structure:
+          ①  Ring (shackle)  — circle outline at the top
+          ②  Crossbar (stock) — horizontal bar below the ring
+          ③  Shaft (shank)    — vertical rod from ring to crown
+          ④  Left/Right arms  — bezier curves from crown outward + down
+          ⑤  Flukes           — filled circles at the arm tips
+    -->
+
+    <!-- ① Ring -->
     <path
-        android:fillColor="#FF4ADE80"
-        android:pathData="M54,20 a8,8 0 1,0 0.001,0 Z" />
+        android:pathData="M45,26 a9,9 0 1,0 18,0 a9,9 0 1,0 -18,0"
+        android:strokeColor="#4ADE80"
+        android:strokeWidth="5"
+        android:fillColor="#00000000" />
+
+    <!-- ② Crossbar -->
     <path
-        android:strokeColor="#FF4ADE80"
+        android:pathData="M28,41 L80,41"
+        android:strokeColor="#4ADE80"
+        android:strokeWidth="5"
+        android:strokeLineCap="round" />
+
+    <!-- ③ Shaft -->
+    <path
+        android:pathData="M54,35 L54,82"
+        android:strokeColor="#4ADE80"
+        android:strokeWidth="5"
+        android:strokeLineCap="round" />
+
+    <!-- ④ Left arm -->
+    <path
+        android:pathData="M54,82 Q37,84 31,70"
+        android:strokeColor="#4ADE80"
         android:strokeWidth="5"
         android:strokeLineCap="round"
-        android:pathData="M54,28 L54,88 M34,50 Q54,65 74,50 M34,88 L54,88 L74,88" />
+        android:fillColor="#00000000" />
+
+    <!-- ④ Right arm -->
+    <path
+        android:pathData="M54,82 Q71,84 77,70"
+        android:strokeColor="#4ADE80"
+        android:strokeWidth="5"
+        android:strokeLineCap="round"
+        android:fillColor="#00000000" />
+
+    <!-- ⑤ Left fluke -->
+    <path
+        android:pathData="M26,70 a5,5 0 1,0 10,0 a5,5 0 1,0 -10,0"
+        android:fillColor="#4ADE80" />
+
+    <!-- ⑤ Right fluke -->
+    <path
+        android:pathData="M72,70 a5,5 0 1,0 10,0 a5,5 0 1,0 -10,0"
+        android:fillColor="#4ADE80" />
+
 </vector>
