@@ -44,21 +44,29 @@ class GeofenceViewModel(application: Application) : AndroidViewModel(application
     val gpsStatus:    StateFlow<String>                  = _gpsStatus
 
     init {
+        // State change callback — drives the drift state card and distance readout
         geofenceService.onStateChange = { state, dist, bearing ->
             _driftState.value = state
             _distanceM.value  = dist
             _bearingDeg.value = bearing
-            // Update GPS status on first fix
-            if (geofenceService.lastLocation != null && _gpsStatus.value == "No GPS fix yet") {
-                _gpsStatus.value = "GPS fix ready"
-            }
         }
+
+        // Location status callback — drives the GPS status label near "Set here"
+        geofenceService.onLocationStatus = { status ->
+            _gpsStatus.value = status
+        }
+
         geofenceService.init()
         _hasAnchor.value = geofenceService.hasAnchor
         updateAnchorText()
         if (geofenceService.hasAnchor) {
             _anchorCoords.value = geofenceService.anchorLatLng()
         }
+
+        // Probe immediately for a cached fix so gpsStatus shows something useful
+        // before the user taps Start — no permission prompt, just reads cache
+        val cached = geofenceService.getBestLastLocation()
+        _gpsStatus.value = if (cached != null) "GPS fix ready ✓" else "No GPS fix yet"
     }
 
     /** Start GPS + motion monitoring. Called when the user enables monitoring on-screen. */

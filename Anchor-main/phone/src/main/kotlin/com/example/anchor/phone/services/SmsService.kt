@@ -1,38 +1,37 @@
 package com.Anchor.watchguardian.services
 
-import android.app.Activity
-import android.app.PendingIntent
-import android.content.BroadcastReceiver
+import android.Manifest
 import android.content.Context
-import android.content.Intent
-import android.content.IntentFilter
+import android.content.pm.PackageManager
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.telephony.SmsManager
 import android.util.Log
+import android.widget.Toast
+import androidx.core.content.ContextCompat
 import com.Anchor.watchguardian.data.model.AlertContact
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
-private const val TAG          = "SmsService"
-private const val ACTION_SENT  = "com.Anchor.watchguardian.SMS_SENT"
+private const val TAG = "SmsService"
 
 /**
  * Sends SMS alerts directly via Android SmsManager.
  *
- * Key fixes vs original:
- *  1. Uses context.getSystemService(SmsManager) on API 31+ — getDefault() silently
- *     fails on Android 12+ especially on dual-SIM devices.
- *  2. Passes a sentIntent PendingIntent so we can log whether each SMS was actually
- *     accepted by the radio layer (RESULT_OK) or rejected (error code).
- *  3. Uses divideMessage() + sendMultipartTextMessage() so long messages are never
- *     silently truncated at 160 characters.
+ * Safe on all API levels:
+ *  - API < 31  : SmsManager.getDefault()
+ *  - API 31+   : context.getSystemService(SmsManager::class.java)
+ *                (getDefault() silently fails on Android 12+ dual-SIM devices)
+ *
+ * Uses divideMessage() + sendMultipartTextMessage() so messages longer
+ * than 160 chars are never silently truncated.
+ *
+ * Shows a Toast on screen for each send attempt so the outcome is
+ * visible without needing Logcat.
  */
 object SmsService {
 
-    /**
-     * Send a disconnect alert SMS to every contact that has a phone number.
-     * Called by HomeViewModel when WatchMonitorService fires the disconnect callback.
-     */
     suspend fun sendDisconnectAlert(
         context:   Context,
         watchName: String,
@@ -40,117 +39,111 @@ object SmsService {
         contacts:  List<AlertContact>
     ) = withContext(Dispatchers.IO) {
 
-        val smsContacts = contacts.filter { it.phoneNumber.isNotBlank() }
-        if (smsContacts.isEmpty()) {
-            Log.w(TAG, "No SMS-capable contacts — skipping")
+        // 1. Guard: permission check first — gives a clear log + toast if missing
+        if (!hasSmsPermission(context)) {
+            Log.e(TAG, "SEND_SMS permission not granted — cannot send alerts")
+            showToast(context, "SMS permission not granted — alerts not sent")
             return@withContext
         }
 
+        // 2. Filter contacts that actually have a phone number
+        val smsContacts = contacts.filter { it.phoneNumber.isNotBlank() }
+        if (smsContacts.isEmpty()) {
+            Log.w(TAG, "No contacts with phone numbers — skipping SMS")
+            showToast(context, "No contacts with phone numbers saved")
+            return@withContext
+        }
+
+        // 3. Resolve SmsManager correctly for the running API level
+        val smsManager = resolveSmsManager(context)
+        if (smsManager == null) {
+            Log.e(TAG, "SmsManager unavailable — device may have no SIM card")
+            showToast(context, "No SIM card detected — SMS not sent")
+            return@withContext
+        }
+
+        // 4. Build message body
         val body = buildSmsBody(ownerName, watchName)
         Log.i(TAG, "Sending SMS to ${smsContacts.size} contact(s): \"$body\"")
 
-        // API 31+ requires context.getSystemService(); getDefault() silently fails there.
-        val smsManager: SmsManager = resolveSmsManager(context)
-
+        // 5. Send to each contact
+        var sentCount = 0
         smsContacts.forEach { contact ->
-            trySend(context, smsManager, contact, body)
+            val success = trySend(smsManager, contact, body)
+            if (success) sentCount++
         }
+
+        // 6. Toast summary visible on screen
+        val summary = when {
+            sentCount == smsContacts.size -> "Alert sent to $sentCount contact(s) ✓"
+            sentCount == 0               -> "SMS failed — check Logcat for details"
+            else                         -> "Sent $sentCount / ${smsContacts.size} alerts"
+        }
+        showToast(context, summary)
+        Log.i(TAG, summary)
     }
 
     // ------------------------------------------------------------------
-    // Helpers
-    // ------------------------------------------------------------------
 
-    private fun buildSmsBody(ownerName: String, watchName: String): String {
-        val name = ownerName.ifBlank { "Your family member" }
-        val device = watchName.ifBlank { "their watch" }
-        return "ANCHOR Alert: $name's $device has disconnected. Please check in immediately."
-    }
+    private fun hasSmsPermission(context: Context): Boolean =
+        ContextCompat.checkSelfPermission(context, Manifest.permission.SEND_SMS) ==
+                PackageManager.PERMISSION_GRANTED
 
-    /** Returns the correct SmsManager for the running API level. */
     @Suppress("DEPRECATION")
-    private fun resolveSmsManager(context: Context): SmsManager =
+    private fun resolveSmsManager(context: Context): SmsManager? =
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            // API 31+ — getSystemService is the non-deprecated path
+            // API 31+: getDefault() is deprecated and unreliable on multi-SIM devices
             context.getSystemService(SmsManager::class.java)
         } else {
             SmsManager.getDefault()
         }
 
+    private fun buildSmsBody(ownerName: String, watchName: String): String {
+        val name   = ownerName.ifBlank { "Your family member" }
+        val device = watchName.ifBlank { "their watch" }
+        return "ANCHOR Alert: $name's $device has disconnected. Please check in immediately."
+    }
+
+    /** Returns true if the SMS was dispatched without exception. */
     private fun trySend(
-        context:    Context,
         smsManager: SmsManager,
         contact:    AlertContact,
         body:       String
-    ) {
-        try {
-            // sentIntent fires a broadcast when the SMS is accepted (or rejected) by the radio.
-            // We register a one-shot receiver so we can log the actual outcome.
-            val action     = "${ACTION_SENT}_${contact.phoneNumber.replace("+", "")}"
-            val sentIntent = PendingIntent.getBroadcast(
-                context,
-                contact.phoneNumber.hashCode(),
-                Intent(action),
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-            )
-
-            // Register a one-shot receiver to log the send result
-            val receiver = object : BroadcastReceiver() {
-                override fun onReceive(ctx: Context?, intent: Intent?) {
-                    when (resultCode) {
-                        Activity.RESULT_OK ->
-                            Log.i(TAG, "SMS sent OK → ${contact.name} (${contact.phoneNumber})")
-                        SmsManager.RESULT_ERROR_GENERIC_FAILURE ->
-                            Log.e(TAG, "SMS FAILED (generic) → ${contact.name}")
-                        SmsManager.RESULT_ERROR_NO_SERVICE ->
-                            Log.e(TAG, "SMS FAILED (no service) → ${contact.name}")
-                        SmsManager.RESULT_ERROR_RADIO_OFF ->
-                            Log.e(TAG, "SMS FAILED (radio off) → ${contact.name}")
-                        else ->
-                            Log.e(TAG, "SMS FAILED (code $resultCode) → ${contact.name}")
-                    }
-                    try { ctx?.unregisterReceiver(this) } catch (_: Exception) {}
-                }
-            }
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                context.registerReceiver(receiver, IntentFilter(action),
-                    Context.RECEIVER_NOT_EXPORTED)
-            } else {
-                @Suppress("UnspecifiedRegisterReceiverFlag")
-                context.registerReceiver(receiver, IntentFilter(action))
-            }
-
-            // Split message if > 160 chars to avoid silent truncation
+    ): Boolean {
+        return try {
             val parts = smsManager.divideMessage(body)
             if (parts.size == 1) {
                 smsManager.sendTextMessage(
                     contact.phoneNumber,
-                    null,
+                    null,  // use default SMSC
                     body,
-                    sentIntent,
-                    null           // deliveryIntent — not needed for now
+                    null,  // sentIntent — not needed; result visible via Toast
+                    null   // deliveryIntent
                 )
             } else {
-                val sentIntents = ArrayList<PendingIntent>(parts.size).apply {
-                    add(sentIntent)                    // track only the first part
-                    repeat(parts.size - 1) { add(null) }
-                }
                 smsManager.sendMultipartTextMessage(
                     contact.phoneNumber,
                     null,
                     parts,
-                    sentIntents,
+                    null,
                     null
                 )
             }
-
-            Log.i(TAG, "SMS dispatched to ${contact.name} (${contact.phoneNumber})" +
-                       " — ${parts.size} part(s)")
-
+            Log.i(TAG, "SMS dispatched → ${contact.name} (${contact.phoneNumber}), ${parts.size} part(s)")
+            true
         } catch (e: SecurityException) {
-            Log.e(TAG, "SMS permission denied for ${contact.name}: ${e.message}")
+            Log.e(TAG, "SMS SecurityException → ${contact.name}: ${e.message}")
+            false
         } catch (e: Exception) {
-            Log.e(TAG, "SMS exception for ${contact.name}: ${e.message}")
+            Log.e(TAG, "SMS failed → ${contact.name} (${contact.phoneNumber}): ${e.message}")
+            false
+        }
+    }
+
+    /** Posts a Toast to the main thread — safe to call from any coroutine dispatcher. */
+    private fun showToast(context: Context, message: String) {
+        Handler(Looper.getMainLooper()).post {
+            Toast.makeText(context, message, Toast.LENGTH_LONG).show()
         }
     }
 }
