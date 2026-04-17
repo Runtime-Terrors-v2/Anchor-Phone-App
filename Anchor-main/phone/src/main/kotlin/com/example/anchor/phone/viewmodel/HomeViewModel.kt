@@ -119,16 +119,34 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
      * Mirrors the "Simulate disconnect" button in HomePage.ets.
      */
     fun simulateDisconnect() {
-        val simName = "Watch Ultimate"
+        val simName   = "Watch Ultimate"
+        val ownerName = UserSession.getOpenID(context).ifBlank { "Guardian" }
         _watchConnected.value = false
         _watchName.value      = simName
+
         val event = AlertEvent(
-            ownerName = "Guardian",
+            ownerName = ownerName,
             watchName = simName,
             timestamp = System.currentTimeMillis()
         )
         _alertHistory.value = listOf(event) + _alertHistory.value
         saveAlertHistory()
+
+        // Mirror real disconnect — show notification + fire SMS to priority contacts
+        val contacts = loadContactsAsAlertContacts()
+        NotificationHelper.showWatchDisconnected(
+            context      = context,
+            watchName    = simName,
+            contactCount = contacts.count { it.phoneNumber.isNotBlank() }
+        )
+        viewModelScope.launch {
+            SmsService.sendDisconnectAlert(
+                context   = context,
+                watchName = simName,
+                ownerName = ownerName,
+                contacts  = contacts
+            )
+        }
     }
 
     fun clearAlertHistory() {
