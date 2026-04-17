@@ -205,39 +205,43 @@ fun GeofenceScreen(
                 }
             }
 
-            // --- Anchor map — only shown once an anchor is saved ---
-            if (hasAnchor && anchorCoords != null) {
-                Spacer(modifier = Modifier.height(16.dp))
+            // --- Anchor map — always visible; shows anchor pin when set,
+            //     otherwise centres on a default demo location ---
+            Spacer(modifier = Modifier.height(16.dp))
 
-                Column(
-                    modifier            = Modifier
-                        .fillMaxWidth(0.9f)
-                        .background(White, RoundedCornerShape(16.dp))
-                        .border(1.dp, Color(0xFFE5E7EB), RoundedCornerShape(16.dp))
-                        .padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    Text(
-                        text       = "Anchor Location",
-                        fontSize   = 15.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color      = TextSecond
-                    )
-                    Text(
-                        text     = "🟢 30 m safe zone   🟠 50 m alert zone",
-                        fontSize = 13.sp,
-                        color    = TextMuted
-                    )
+            // Use real anchor coords if saved, otherwise fall back to hardcoded demo point
+            val mapLat = anchorCoords?.first  ?: 1.3483    // Nanyang Business School, NTU Singapore
+            val mapLng = anchorCoords?.second ?: 103.6831
 
-                    val (lat, lng) = anchorCoords!!
-                    AnchorMapView(
-                        lat      = lat,
-                        lng      = lng,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(260.dp)
-                    )
-                }
+            Column(
+                modifier            = Modifier
+                    .fillMaxWidth(0.9f)
+                    .background(White, RoundedCornerShape(16.dp))
+                    .border(1.dp, Color(0xFFE5E7EB), RoundedCornerShape(16.dp))
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Text(
+                    text       = if (hasAnchor) "Anchor Location" else "Map Preview",
+                    fontSize   = 15.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color      = TextSecond
+                )
+                Text(
+                    text     = if (hasAnchor) "🟢 30 m safe zone   🟠 50 m alert zone"
+                               else           "Set an anchor to pin your home location",
+                    fontSize = 13.sp,
+                    color    = TextMuted
+                )
+
+                AnchorMapView(
+                    lat        = mapLat,
+                    lng        = mapLng,
+                    showAnchor = hasAnchor,
+                    modifier   = Modifier
+                        .fillMaxWidth()
+                        .height(260.dp)
+                )
             }
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -339,12 +343,11 @@ fun GeofenceScreen(
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
 private fun AnchorMapView(
-    lat:      Double,
-    lng:      Double,
-    modifier: Modifier = Modifier
+    lat:        Double,
+    lng:        Double,
+    showAnchor: Boolean = true,
+    modifier:   Modifier = Modifier
 ) {
-    val html = buildLeafletHtml(lat, lng)
-
     AndroidView(
         modifier = modifier,
         factory  = { context ->
@@ -353,29 +356,55 @@ private fun AnchorMapView(
                 settings.javaScriptEnabled = true
                 settings.domStorageEnabled = true
                 loadDataWithBaseURL(
-                    "https://unpkg.com",   // allows Leaflet CDN assets to load
-                    html,
-                    "text/html",
-                    "UTF-8",
-                    null
+                    "https://unpkg.com",
+                    buildLeafletHtml(lat, lng, showAnchor),
+                    "text/html", "UTF-8", null
                 )
             }
         },
         update = { webView ->
-            // Re-load when coordinates change (e.g. anchor updated)
             webView.loadDataWithBaseURL(
                 "https://unpkg.com",
-                buildLeafletHtml(lat, lng),
-                "text/html",
-                "UTF-8",
-                null
+                buildLeafletHtml(lat, lng, showAnchor),
+                "text/html", "UTF-8", null
             )
         }
     )
 }
 
 /** Builds the self-contained Leaflet HTML shown in the WebView. */
-private fun buildLeafletHtml(lat: Double, lng: Double): String = """
+private fun buildLeafletHtml(lat: Double, lng: Double, showAnchor: Boolean): String {
+    val anchorJs = if (showAnchor) """
+    // Safe zone — 30 m green circle
+    L.circle([$lat, $lng], {
+      radius: 30, color: '#4ADE80', fillColor: '#4ADE80', fillOpacity: 0.15, weight: 2
+    }).addTo(map);
+
+    // Alert zone — 50 m red dashed circle
+    L.circle([$lat, $lng], {
+      radius: 50, color: '#F87171', fillColor: '#F87171', fillOpacity: 0.08, weight: 2,
+      dashArray: '6 4'
+    }).addTo(map);
+
+    // Anchor pin
+    var icon = L.divIcon({
+      html: '<div style="font-size:24px;line-height:1;">📍</div>',
+      iconSize: [28, 28], iconAnchor: [14, 28], className: ''
+    });
+    L.marker([$lat, $lng], { icon: icon })
+     .addTo(map)
+     .bindPopup('Home anchor<br>${"%.5f".format(lat)}°, ${"%.5f".format(lng)}°')
+     .openPopup();
+    """ else """
+    // No anchor set yet — show a subtle crosshair at map centre
+    var icon = L.divIcon({
+      html: '<div style="font-size:20px;line-height:1;opacity:0.4;">＋</div>',
+      iconSize: [20, 20], iconAnchor: [10, 10], className: ''
+    });
+    L.marker([$lat, $lng], { icon: icon, interactive: false }).addTo(map);
+    """
+
+    return """
 <!DOCTYPE html>
 <html>
 <head>
@@ -392,35 +421,15 @@ private fun buildLeafletHtml(lat: Double, lng: Double): String = """
   <script>
     var map = L.map('map', { zoomControl: true, attributionControl: false })
                .setView([$lat, $lng], 17);
-
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 19
     }).addTo(map);
-
-    // Safe zone — 30 m green circle
-    L.circle([$lat, $lng], {
-      radius: 30, color: '#4ADE80', fillColor: '#4ADE80', fillOpacity: 0.15, weight: 2
-    }).addTo(map);
-
-    // Alert zone — 50 m amber circle
-    L.circle([$lat, $lng], {
-      radius: 50, color: '#F87171', fillColor: '#F87171', fillOpacity: 0.08, weight: 2,
-      dashArray: '6 4'
-    }).addTo(map);
-
-    // Anchor pin
-    var icon = L.divIcon({
-      html: '<div style="font-size:24px;line-height:1;">📍</div>',
-      iconSize: [28, 28], iconAnchor: [14, 28], className: ''
-    });
-    L.marker([$lat, $lng], { icon: icon })
-     .addTo(map)
-     .bindPopup('Home anchor<br>${"%.5f".format(lat)}°, ${"%.5f".format(lng)}°')
-     .openPopup();
+    $anchorJs
   </script>
 </body>
 </html>
 """.trimIndent()
+}
 
 // ------------------------------------------------------------------
 // State styling helpers
