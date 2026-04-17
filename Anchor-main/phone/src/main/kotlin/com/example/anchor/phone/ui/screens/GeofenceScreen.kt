@@ -210,8 +210,8 @@ fun GeofenceScreen(
             Spacer(modifier = Modifier.height(16.dp))
 
             // Use real anchor coords if saved, otherwise fall back to hardcoded demo point
-            val mapLat = anchorCoords?.first  ?: 1.3483    // Nanyang Business School, NTU Singapore
-            val mapLng = anchorCoords?.second ?: 103.6831
+            val mapLat = anchorCoords?.first  ?: 1.3484    // Nanyang Business School (Wee Cho Yaw), NTU
+            val mapLng = anchorCoords?.second ?: 103.6820
 
             Column(
                 modifier            = Modifier
@@ -420,7 +420,7 @@ private fun buildLeafletHtml(lat: Double, lng: Double, showAnchor: Boolean): Str
   <div id="map"></div>
   <script>
     var map = L.map('map', { zoomControl: true, attributionControl: false })
-               .setView([$lat, $lng], 17);
+               .setView([$lat, $lng], 18);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 19
     }).addTo(map);
