@@ -125,7 +125,10 @@ fun GeofenceScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // --- Anchor section ---
+            // --- Anchor section (map embedded inside) ---
+            val mapLat = anchorCoords?.first  ?: 1.3484    // Nanyang Business School, NTU
+            val mapLng = anchorCoords?.second ?: 103.6820
+
             Column(
                 modifier            = Modifier
                     .fillMaxWidth(0.9f)
@@ -134,6 +137,7 @@ fun GeofenceScreen(
                     .padding(20.dp),
                 verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
+                // Title row
                 Text(
                     text       = "Home Anchor",
                     fontSize   = 15.sp,
@@ -141,6 +145,7 @@ fun GeofenceScreen(
                     color      = TextSecond
                 )
 
+                // Coords + GPS status + buttons
                 Row(
                     modifier              = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -151,15 +156,15 @@ fun GeofenceScreen(
                         verticalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
                         Text(
-                            text     = if (hasAnchor) anchorText else "No anchor set",
-                            fontSize = 15.sp,
+                            text       = if (hasAnchor) anchorText else "No anchor set",
+                            fontSize   = 15.sp,
                             fontWeight = FontWeight.Medium,
-                            color    = if (hasAnchor) TextPrimary else TextMuted
+                            color      = if (hasAnchor) TextPrimary else TextMuted
                         )
                         Text(
-                            text     = gpsStatus,
+                            text  = gpsStatus,
                             fontSize = 13.sp,
-                            color    = when {
+                            color = when {
                                 gpsStatus.contains("ready", ignoreCase = true) -> SafeGreen
                                 gpsStatus.contains("No GPS", ignoreCase = true) -> DriftAmber
                                 else -> TextMuted
@@ -203,36 +208,15 @@ fun GeofenceScreen(
                         }
                     }
                 }
-            }
 
-            // --- Anchor map — always visible; shows anchor pin when set,
-            //     otherwise centres on a default demo location ---
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // Use real anchor coords if saved, otherwise fall back to hardcoded demo point
-            val mapLat = anchorCoords?.first  ?: 1.3483    // Nanyang Business School, NTU Singapore
-            val mapLng = anchorCoords?.second ?: 103.6831
-
-            Column(
-                modifier            = Modifier
-                    .fillMaxWidth(0.9f)
-                    .background(White, RoundedCornerShape(16.dp))
-                    .border(1.dp, Color(0xFFE5E7EB), RoundedCornerShape(16.dp))
-                    .padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                Text(
-                    text       = if (hasAnchor) "Anchor Location" else "Map Preview",
-                    fontSize   = 15.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color      = TextSecond
-                )
-                Text(
-                    text     = if (hasAnchor) "🟢 30 m safe zone   🟠 50 m alert zone"
-                               else           "Set an anchor to pin your home location",
-                    fontSize = 13.sp,
-                    color    = TextMuted
-                )
+                // Map — always visible inside this card
+                if (hasAnchor) {
+                    Text(
+                        text     = "🟢 30 m safe zone   🟠 50 m alert zone",
+                        fontSize = 12.sp,
+                        color    = TextMuted
+                    )
+                }
 
                 AnchorMapView(
                     lat        = mapLat,
@@ -240,7 +224,8 @@ fun GeofenceScreen(
                     showAnchor = hasAnchor,
                     modifier   = Modifier
                         .fillMaxWidth()
-                        .height(260.dp)
+                        .height(240.dp)
+                        .border(1.dp, Color(0xFFE5E7EB), RoundedCornerShape(12.dp))
                 )
             }
 
@@ -420,7 +405,7 @@ private fun buildLeafletHtml(lat: Double, lng: Double, showAnchor: Boolean): Str
   <div id="map"></div>
   <script>
     var map = L.map('map', { zoomControl: true, attributionControl: false })
-               .setView([$lat, $lng], 17);
+               .setView([$lat, $lng], 18);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 19
     }).addTo(map);
