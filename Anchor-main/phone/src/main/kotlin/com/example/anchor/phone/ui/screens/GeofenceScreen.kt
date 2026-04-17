@@ -1,6 +1,5 @@
 package com.Anchor.watchguardian.ui.screens
 
-import android.annotation.SuppressLint
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.compose.foundation.background
@@ -321,11 +320,10 @@ fun GeofenceScreen(
 }
 
 // ------------------------------------------------------------------
-// Leaflet map composable — embeds an OpenStreetMap tile layer in a WebView
-// with an anchor marker, 30 m safe circle (green), and 50 m alert circle (amber).
+// Map composable — uses OpenStreetMap's embed URL directly in a WebView.
+// No CDN, no JS dependencies, no reload-on-recompose issues.
 // ------------------------------------------------------------------
 
-@SuppressLint("SetJavaScriptEnabled")
 @Composable
 private fun AnchorMapView(
     lat:        Double,
@@ -333,87 +331,32 @@ private fun AnchorMapView(
     showAnchor: Boolean = true,
     modifier:   Modifier = Modifier
 ) {
-    AndroidView(
-        modifier = modifier,
-        factory  = { context ->
-            WebView(context).apply {
-                webViewClient = WebViewClient()
-                settings.javaScriptEnabled = true
-                settings.domStorageEnabled = true
-                loadDataWithBaseURL(
-                    "https://unpkg.com",
-                    buildLeafletHtml(lat, lng, showAnchor),
-                    "text/html", "UTF-8", null
-                )
+    // Bounding box — ~300 m radius around the point
+    val delta  = 0.003
+    val bbox   = "${lng - delta},${lat - delta},${lng + delta},${lat + delta}"
+    // OSM embed URL: shows the map with a marker pin when showAnchor is true
+    val url    = if (showAnchor)
+        "https://www.openstreetmap.org/export/embed.html?bbox=$bbox&layer=mapnik&marker=$lat,$lng"
+    else
+        "https://www.openstreetmap.org/export/embed.html?bbox=$bbox&layer=mapnik"
+
+    // key = url ensures the WebView only reloads when coords actually change,
+    // not on every recomposition
+    key(url) {
+        AndroidView(
+            modifier = modifier,
+            factory  = { context ->
+                WebView(context).apply {
+                    webViewClient               = WebViewClient()
+                    settings.javaScriptEnabled  = true
+                    settings.domStorageEnabled  = true
+                    settings.loadWithOverviewMode = true
+                    settings.useWideViewPort    = true
+                    loadUrl(url)
+                }
             }
-        },
-        update = { webView ->
-            webView.loadDataWithBaseURL(
-                "https://unpkg.com",
-                buildLeafletHtml(lat, lng, showAnchor),
-                "text/html", "UTF-8", null
-            )
-        }
-    )
-}
-
-/** Builds the self-contained Leaflet HTML shown in the WebView. */
-private fun buildLeafletHtml(lat: Double, lng: Double, showAnchor: Boolean): String {
-    val anchorJs = if (showAnchor) """
-    // Safe zone — 30 m green circle
-    L.circle([$lat, $lng], {
-      radius: 30, color: '#4ADE80', fillColor: '#4ADE80', fillOpacity: 0.15, weight: 2
-    }).addTo(map);
-
-    // Alert zone — 50 m red dashed circle
-    L.circle([$lat, $lng], {
-      radius: 50, color: '#F87171', fillColor: '#F87171', fillOpacity: 0.08, weight: 2,
-      dashArray: '6 4'
-    }).addTo(map);
-
-    // Anchor pin
-    var icon = L.divIcon({
-      html: '<div style="font-size:24px;line-height:1;">📍</div>',
-      iconSize: [28, 28], iconAnchor: [14, 28], className: ''
-    });
-    L.marker([$lat, $lng], { icon: icon })
-     .addTo(map)
-     .bindPopup('Home anchor<br>${"%.5f".format(lat)}°, ${"%.5f".format(lng)}°')
-     .openPopup();
-    """ else """
-    // No anchor set yet — show a subtle crosshair at map centre
-    var icon = L.divIcon({
-      html: '<div style="font-size:20px;line-height:1;opacity:0.4;">＋</div>',
-      iconSize: [20, 20], iconAnchor: [10, 10], className: ''
-    });
-    L.marker([$lat, $lng], { icon: icon, interactive: false }).addTo(map);
-    """
-
-    return """
-<!DOCTYPE html>
-<html>
-<head>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    html, body, #map { width: 100%; height: 100%; }
-  </style>
-</head>
-<body>
-  <div id="map"></div>
-  <script>
-    var map = L.map('map', { zoomControl: true, attributionControl: false })
-               .setView([$lat, $lng], 18);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom: 19
-    }).addTo(map);
-    $anchorJs
-  </script>
-</body>
-</html>
-""".trimIndent()
+        )
+    }
 }
 
 // ------------------------------------------------------------------
