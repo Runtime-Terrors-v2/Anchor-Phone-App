@@ -1,7 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "Bash(gh pr create --title 'feat: real Bluetooth watch connect/disconnect detection' --body ':*)"
-    ]
-  }
-}
